@@ -19,14 +19,14 @@ A lightweight HTMX extension for optimistic UI updates with automatic rollback o
 
 **Via CDN (jsDelivr, pinned major):**
 ```html
-<script src="https://unpkg.com/htmx.org@2"></script>
-<script src="https://cdn.jsdelivr.net/npm/hx-optimistic@1/hx-optimistic.min.js"></script>
+<script defer src="https://unpkg.com/htmx.org@2"></script>
+<script defer src="https://cdn.jsdelivr.net/npm/hx-optimistic@1/hx-optimistic.min.js"></script>
 ```
 
 Alternative (unpkg, pin exact version):
 ```html
-<script src="https://unpkg.com/htmx.org@2"></script>
-<script src="https://unpkg.com/hx-optimistic@1.0.0/hx-optimistic.min.js"></script>
+<script defer src="https://unpkg.com/htmx.org@2"></script>
+<script defer src="https://unpkg.com/hx-optimistic@1.0.0/hx-optimistic.min.js"></script>
 ```
 
 **Via NPM:**
