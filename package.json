@@ -3,17 +3,23 @@
   "version": "1.0.0",
   "description": "HTMX extension for optimistic UI updates with automatic rollback on errors",
   "main": "hx-optimistic.js",
+  "types": "hx-optimistic.d.ts",
   "files": [
     "hx-optimistic.js",
     "hx-optimistic.min.js",
+    "hx-optimistic.d.ts",
     "README.md"
   ],
   "scripts": {
-    "test": "open test.html",
-    "build": "npm run minify",
+    "test": "vitest",
+    "test:ui": "vitest --ui",
+    "test:run": "vitest run",
+    "test:coverage": "vitest run --coverage",
+    "test:all": "npm run test:run",
+    "build": "esbuild src/index.js --bundle --format=iife --outfile=hx-optimistic.js && npm run minify",
     "minify": "npx terser hx-optimistic.js -o hx-optimistic.min.js --compress --mangle",
-    "dev": "npx http-server -p 8080 -o test.html",
-    "prepublishOnly": "npm run build"
+    "dev": "npx http-server -p 8080 -c-1",
+    "prepublishOnly": "npm run build && npm run test:run"
   },
   "keywords": [
     "htmx",
@@ -39,8 +45,14 @@
     "htmx.org": "^1.9.0"
   },
   "devDependencies": {
+    "@vitest/coverage-v8": "^1.6.0",
+    "@vitest/ui": "^1.6.0",
+    "c8": "^9.1.0",
+    "esbuild": "^0.21.0",
+    "husky": "^9.0.11",
+    "jsdom": "^24.0.0",
     "terser": "^5.15.0",
-    "http-server": "^14.1.1"
+    "vitest": "^1.6.0"
   },
   "engines": {
     "node": ">=14"

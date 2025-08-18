@@ -1,512 +1,267 @@
 # hx-optimistic
 
-An HTMX extension for optimistic UI updates with automatic rollback on errors.
+A lightweight HTMX extension for optimistic UI updates with automatic rollback on errors. Show immediate user feedback while requests are in-flight, with intelligent error handling and seamless state management.
 
-## Features
+## ✨ Features
 
-- 🎯 **Optimistic Updates** - Show immediate UI feedback while requests are in-flight
-- 🔄 **Automatic Rollback** - Revert to original state on errors
-- 🎨 **Template Support** - Use HTML templates for rich loading and error states
-- 🚫 **No CSS Included** - You control all styling through provided class names
-- 📦 **Tiny** - ~2KB gzipped
-- 🔧 **Configurable** - Fine-tune behavior per element
+- 🎯 **Optimistic Updates** - Immediate UI feedback while requests are processing
+- 🔄 **Automatic Rollback** - Intelligent revert to original state on errors
+- 📝 **Input Interpolation** - Dynamic templates with `${this.value}`, `${textarea}`, `${data:key}` helpers
+- 🎨 **Template Support** - Rich HTML templates for loading and error states
+- ⚠️ **Developer Warnings** - Console warnings for unsupported patterns
+- 🚫 **No CSS Required** - You control all styling through provided class names
+- 📦 **Tiny** - Only **13.5KB** uncompressed, **8.8KB** minified, **3.1KB** gzipped
+- 🔧 **Highly Configurable** - Fine-tune behavior per element
 
-## Installation
+## 🚀 Quick Start
 
-### Via CDN
+### Installation
 
+**Via CDN:**
 ```html
 <script src="https://unpkg.com/htmx.org"></script>
-<script src="https://unpkg.com/hx-optimistic/hx-optimistic.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/hx-optimistic@latest/hx-optimistic.min.js"></script>
 ```
 
-### Via NPM
-
+**Via NPM:**
 ```bash
 npm install hx-optimistic
 ```
 
-```javascript
-import "htmx.org";
-import "hx-optimistic";
-```
+### Basic Usage
 
-## Quick Start
-
-Enable the extension on your body tag or specific elements:
+Enable the extension and add optimistic behavior to any HTMX element:
 
 ```html
 <body hx-ext="optimistic">
-  <!-- Simple optimistic update -->
+  <!-- Simple like button with optimistic updates -->
   <button
     hx-post="/api/like"
     hx-target="this"
-    data-optimistic='{
-            "snapshot": ["textContent"],
-            "values": {
-              "textContent": "❤️ Liked"
-            }
-          }'
+    hx-swap="outerHTML"
+    data-optimistic='{"values":{"textContent":"❤️ Liked!","className":"btn liked"},"errorMessage":"Failed to like"}'
   >
     🤍 Like
   </button>
 </body>
 ```
 
-## Configuration
+## 🎯 Core Concepts
 
-Configure optimistic behavior using the `data-optimistic` attribute with JSON:
+### Values vs Templates
 
-### Configuration Options Reference
+**Values** - Perfect for simple optimistic updates:
+```html
+<button 
+  data-count="42" 
+  data-liked="false"
+  hx-post="/api/like"
+  hx-target="this" 
+  hx-swap="outerHTML"
+  data-optimistic='{
+    "values": {
+      "textContent": "❤️ Liked! (${count + 1})",  // Show liked state with +1 count
+      "className": "btn liked",
+      "data-liked": "true"
+    }
+  }'>
+  🤍 Like (42)
+</button>
+```
 
-All configuration options and their detailed explanations:
+**Templates** - Ideal for complex optimistic UI changes:
+```html
+<form hx-post="/api/comments" hx-target=".comments" hx-swap="beforeend"
+      data-optimistic='{
+        "template": "<div class='comment optimistic'><strong>You:</strong> ${textarea}</div>",
+        "errorTemplate": "<div class='error'>❌ Comment failed to post</div>"
+      }'>
+  <textarea name="comment" placeholder="Your comment here"></textarea>
+  <button type="submit">Post Comment</button>
+</form>
+```
 
-#### Snapshot Options
+### Input Interpolation
 
-These control what gets preserved for potential rollback:
+Dynamic content using `${...}` syntax with powerful helpers:
 
+```html
+<form hx-post="/api/comments" hx-ext="optimistic"
+      data-optimistic='{"template":"<div>Posting: ${textarea}</div>"}'>
+  <textarea name="comment">Your comment here</textarea>
+  <button type="submit">Post</button>
+</form>
+```
+
+## 📖 Interpolation Reference
+
+All `${...}` patterns supported in templates and values:
+
+| Pattern | Description | Example |
+|---------|-------------|---------|
+| `${this.value}` | Element's input value | `"Saving: ${this.value}"` |
+| `${this.textContent}` | Element's text content | `"Was: ${this.textContent}"` |
+| `${textarea}` | First textarea in form | `"Comment: ${textarea}"` |
+| `${email}` | First email input | `"Email: ${email}"` |
+| `${data:key}` | Data attribute shorthand | `"Count: ${data:count}"` |
+| `${attr:name}` | Any HTML attribute | `"ID: ${attr:id}"` |
+| `${status}` | HTTP status (errors only) | `"Error ${status}"` |
+| `${error}` | Error message (errors only) | `"Failed: ${error}"` |
+
+**Form Field Helpers:**
+- `${textarea}`, `${email}`, `${password}`, `${text}`, `${url}`, `${tel}`, `${search}`
+- `${fieldName}` - Any field with `name="fieldName"`
+
+## ⚙️ Configuration Options
+
+Complete configuration reference for `data-optimistic`:
+
+### Snapshot Options
 ```javascript
 {
-  "snapshot": ["textContent", "innerHTML", "className", "data-state"],
-  "snapshotContent": true
+  "snapshot": ["textContent", "className", "data-count"],  // Specific properties
+  "snapshotContent": true  // Full innerHTML backup
 }
 ```
 
-- **`snapshot`** _(array)_: List of specific element properties to preserve before making optimistic changes
-  - `"textContent"` - Preserves the text content only (no HTML tags)
-  - `"innerHTML"` - Preserves the complete HTML content inside the element
-  - `"className"` - Preserves the complete CSS class string
-  - `"data-*"` - Preserves specific data attributes (e.g., `"data-state"`, `"data-count"`)
-  - Any other element property name (e.g., `"value"`, `"disabled"`)
-
-- **`snapshotContent`** _(boolean)_: When `true`, automatically preserves the entire `innerHTML` for complex rollbacks. Use this for elements with rich content that will be completely replaced by templates.
-
-#### Optimistic Update Options
-
-These define what happens immediately when a request starts:
-
+### Optimistic Updates
 ```javascript
 {
+  // Simple property updates
   "values": {
     "textContent": "Loading...",
-    "className": "btn loading",
-    "data-state": "pending"
+    "className": "btn loading"
   },
-  "optimisticTemplate": "#loading-template",
-  "class": "hx-optimistic-custom"
+  
+  // Rich HTML templates
+  "template": "#loading-template",  // Or inline HTML
+  "target": "closest .card",       // Different target for optimistic update
+  "swap": "beforeend"              // Append instead of replace
 }
 ```
 
-- **`values`** _(object)_: Simple property updates to apply immediately
-  - Key: Element property name (`textContent`, `innerHTML`, `className`, `data-*`, etc.)
-  - Value: New value (can include template expressions like `"${this.dataset.count}"`)
-
-- **`optimisticTemplate`** _(string)_: HTML content to show during request
-  - If starts with `#`: Treated as template element ID (`"#my-template"`)
-  - Otherwise: Treated as inline HTML string (`"<div>Loading...</div>"`)
-  - Supports variable substitution with `${...}` syntax
-
-- **`class`** _(string)_: Custom CSS class to apply during optimistic update (default: `"hx-optimistic"`)
-
-#### Error Handling Options
-
-These control what happens when requests fail:
-
+### Error Handling
 ```javascript
 {
   "errorMessage": "Request failed",
-  "errorTemplate": "#error-template",
-  "errorTarget": "append",
-  "revertDelay": 3000
+  "errorTemplate": "<div class='error'>Error ${status}: ${statusText}</div>",
+  "errorMode": "append",  // "replace" (default) or "append"
+  "delay": 2000          // Auto-revert delay in ms
 }
 ```
 
-- **`errorMessage`** _(string)_: Simple text message to show on error
-  - Replaces element content unless `errorTarget` is set to `"append"`
+## 🎨 CSS Classes
 
-- **`errorTemplate`** _(string)_: HTML template for rich error display
-  - If starts with `#`: Template element ID
-  - Otherwise: Inline HTML string
-  - Supports variables: `${status}`, `${statusText}`, `${error}`, `${this.*}`
-  - Example: `"<div>Error ${status}: ${statusText}</div>"`
-
-- **`errorTarget`** _(string)_: How to display error content
-  - `"replace"` _(default)_: Replace element content with error
-  - `"append"`: Add error as a child element (preserves original content)
-
-- **`revertDelay`** _(number)_: Milliseconds before reverting to original state
-  - Default: `1500` (1.5 seconds)
-  - Set to `0` to disable automatic revert (error state persists)
-
-### Complete Example with All Options
-
-```javascript
-{
-  // Snapshot configuration
-  "snapshot": ["textContent", "className", "data-count"],
-  "snapshotContent": false,
-
-  // Optimistic state (choose one approach)
-  "values": {
-    "textContent": "Processing ${this.dataset.action}...",
-    "className": "btn loading",
-    "data-state": "pending"
-  },
-  // OR use a template
-  "optimisticTemplate": "#processing-template",
-
-  // Custom optimistic class
-  "class": "hx-optimistic-processing",
-
-  // Error handling
-  "errorTemplate": "<div class='error'>Failed: ${status}</div>",
-  "errorTarget": "append",
-  "revertDelay": 2500
-}
-```
-
-### Simple vs Template Approaches
-
-**Simple Values Approach** - Good for basic text/class changes:
-
-```javascript
-{
-  "snapshot": ["textContent"],
-  "values": {
-    "textContent": "Saving..."
-  },
-  "errorMessage": "Save failed"
-}
-```
-
-**Template Approach** - Good for rich HTML content:
-
-```javascript
-{
-  "snapshotContent": true,
-  "optimisticTemplate": "<div class='saving'><spinner/> Saving...</div>",
-  "errorTemplate": "<div class='error'>❌ Save failed</div>"
-}
-```
-
-## CSS Classes
-
-The extension provides these classes for styling:
+Style the different states with these automatically applied classes:
 
 ```css
-/* Applied during optimistic update */
+/* During optimistic update */
 .hx-optimistic {
-  opacity: 0.7;
-  background-color: #fef3c7;
+  opacity: 0.8;
+  background-color: #bfdbfe;
+  box-shadow: 0 0 0 2px #3b82f6;
+  transition: all 0.2s ease-in-out;
 }
 
-/* Applied when request fails */
+/* During error state */
 .hx-optimistic-error {
   background-color: #fee2e2;
   color: #dc2626;
+  box-shadow: 0 0 0 2px #ef4444;
 }
 
-/* Applied during revert animation */
+/* During revert animation */
 .hx-optimistic-reverting {
   animation: fadeBack 0.3s ease-out;
 }
 
-/* Error messages appended to elements */
+/* Appended error messages */
 .hx-optimistic-error-message {
   padding: 0.5rem;
   margin-top: 0.25rem;
-  border-radius: 0.25rem;
   background: #fee2e2;
   color: #dc2626;
-  font-size: 0.875rem;
+  border-radius: 0.25rem;
 }
 ```
 
-## Examples
+## 📚 Examples
 
-### Inline Editing
+For comprehensive examples and patterns, see the [demo documentation](demo/README.md) which includes:
 
-```html
-<div
-  class="editable"
-  hx-patch="/api/products/1/name"
-  hx-trigger="blur from:input"
-  hx-target="this"
-  data-optimistic='{
-       "snapshotContent": true,
-       "optimisticTemplate": "<span class=\"saving\">Saving...</span>",
-       "errorMessage": "Failed to save"
-     }'
->
-  <span
-    onclick="this.style.display='none'; 
-                 this.nextElementSibling.style.display='block';
-                 this.nextElementSibling.focus();"
-  >
-    Click to edit
-  </span>
-  <input style="display:none" type="text" value="Click to edit" />
-</div>
+- **Like Button** - Toggle states with counter updates
+- **Comment System** - Input interpolation with `${textarea}` 
+- **Inline Editing** - Click-to-edit with validation
+- **Status Toggle** - Rich templates with attribute helpers
+- **Product Rating** - Complex data interpolation patterns
+- **Error Handling** - Different error modes and recovery
+
+Each example includes complete working code, API endpoints, and detailed explanations of the patterns used.
+
+## 🔧 Developer Features
+
+### Console Warnings
+The extension provides helpful warnings for unsupported patterns:
+
+```javascript
+// ❌ These will show console warnings
+"${this.querySelector('.test')}"    // DOM queries not allowed
+"${window.location.href}"           // Global object access
+"${JSON.parse(data)}"               // Method calls not supported
+
+// ✅ These are supported
+"${data:user-id}"                   // Data attributes
+"${attr:title}"                     // HTML attributes  
+"${this.value}"                     // Element properties
 ```
 
-### Form Submission
+### Template References
+Use `<template>` elements for better organization:
 
 ```html
-<form
-  hx-post="/api/contact"
-  hx-ext="optimistic"
-  data-optimistic='{
-        "snapshotContent": true,
-        "optimisticTemplate": "<div class=\"success\">✓ Message sent!</div>",
-        "errorTemplate": "<div class=\"error\">Failed to send. Please try again.</div>",
-        "revertDelay": 3000
-      }'
->
-  <input type="email" name="email" required />
-  <textarea name="message" required></textarea>
-  <button type="submit">Send Message</button>
-</form>
-```
-
-### Like Button with Counter
-
-```html
-<button
-  data-count="42"
-  hx-post="/api/posts/1/like"
-  hx-target="this"
-  hx-ext="optimistic"
-  data-optimistic='{
-          "snapshot": ["textContent", "data-count"],
-          "values": {
-            "textContent": "❤️ ${parseInt(this.dataset.count) + 1}",
-            "data-count": "${parseInt(this.dataset.count) + 1}"
-          },
-          "errorMessage": "Could not like post"
-        }'
->
-  🤍 42
-</button>
-```
-
-### Shopping Cart
-
-```html
-<!-- Template for loading state -->
-<template id="adding-to-cart">
-  <div class="cart-feedback">
+<template id="loading-state">
+  <div class="loading">
     <svg class="spinner">...</svg>
-    <span>Adding to cart...</span>
+    <span>Processing ${this.textContent}...</span>
   </div>
 </template>
 
-<!-- Template for error state -->
-<template id="cart-error">
-  <div class="alert alert-error">
-    <h4>Could not add to cart</h4>
-    <p>${status === 409 ? "Item already in cart" : "Please try again"}</p>
-  </div>
-</template>
-
-<button
-  hx-post="/api/cart/add/123"
-  hx-ext="optimistic"
-  data-optimistic='{
-          "snapshotContent": true,
-          "optimisticTemplate": "#adding-to-cart",
-          "errorTemplate": "#cart-error",
-          "revertDelay": 3000
-        }'
->
-  Add to Cart
+<!-- Reference with # prefix -->
+<button data-optimistic='{"template": "#loading-state"}'>
+  Process Data
 </button>
 ```
 
-### Field Validation
+## 🎮 Interactive Demo
 
-```html
-<div class="form-field">
-  <input
-    type="email"
-    name="email"
-    hx-patch="/api/validate/email"
-    hx-trigger="blur changed"
-    hx-target="next .feedback"
-    hx-ext="optimistic"
-    data-optimistic='{
-           "snapshot": ["innerHTML"],
-           "optimisticTemplate": "<span class=\"validating\">Checking...</span>",
-           "errorTemplate": "<span class=\"error\">Invalid email format</span>"
-         }'
-  />
-  <div class="feedback"></div>
-</div>
-```
+Explore all features with the comprehensive demo:
 
-## Template Variables
-
-Templates can use these variables with `${}` syntax:
-
-### In Optimistic Templates
-
-- `${this.property}` - Any property of the current element
-- `${this.dataset.name}` - Data attributes
-- `${parseInt(this.dataset.count) + 1}` - Simple expressions
-
-### In Error Templates
-
-- `${status}` - HTTP status code (404, 500, etc.)
-- `${statusText}` - HTTP status text
-- `${error}` - Error message
-- `${this.property}` - Element properties still available
-
-### Conditional Rendering
-
-```html
-"errorTemplate": "
-<div>${status === 422 ? 'Validation failed' : 'Server error'}</div>
-"
-```
-
-## Advanced Configuration
-
-### Custom Classes
-
-```javascript
-{
-  "class": "hx-optimistic-custom",  // Custom class instead of default
-  "values": {
-    "className": "my-loading-state"  // Complete className replacement
-  }
-}
-```
-
-### Complex Updates
-
-```javascript
-{
-  // Snapshot multiple attributes
-  "snapshot": ["textContent", "className", "data-state", "innerHTML"],
-
-  // Update multiple properties
-  "values": {
-    "textContent": "Processing...",
-    "className": "btn btn-loading",
-    "data-state": "pending"
-  }
-}
-```
-
-### Append Error Messages
-
-```javascript
-{
-  "errorMessage": "Network error occurred",
-  "errorTarget": "append",  // Append instead of replace
-  "revertDelay": 5000
-}
-```
-
-### No Automatic Revert
-
-```javascript
-{
-  "revertDelay": 0  // Don't automatically revert on error
-}
-```
-
-## Events Handled
-
-The extension responds to these HTMX events:
-
-- `htmx:beforeRequest` - Applies optimistic state
-- `htmx:afterSwap` - Confirms successful update
-- `htmx:responseError` - Server returned an error
-- `htmx:swapError` - Error during swap
-- `htmx:timeout` - Request timed out
-- `htmx:sendError` - Network error
-
-## Testing
-
-### Running Tests
-
-The extension includes a comprehensive test suite using Mocha, Chai, and Sinon (all loaded via CDN). To run the tests:
-
-**Option 1: Open in Browser**
 ```bash
-# Open test.html directly in your browser
-open test.html
-# or on Linux/Windows
-xdg-open test.html  # Linux
-start test.html     # Windows
-```
-
-**Option 2: Using Local Server**
-```bash
-# Install a simple HTTP server if you don't have one
-npm install -g http-server
-
-# Serve the files and open tests
-http-server -p 8080 -o test.html
-```
-
-**Option 3: Using the Package Scripts**
-```bash
-# If you've cloned the repo and have package.json
+cd demo/
 npm install
-npm test        # Opens test.html in default browser
-npm run dev     # Starts dev server on port 8080
+npm run dev
+# Visit http://localhost:4321
 ```
 
-### Test Coverage
+The demo includes:
+- Live examples of all patterns
+- Error simulation for testing
+- Developer console warnings
+- Complete code explanations
+- Copy-paste ready configurations
 
-The test suite covers:
-- ✅ Basic optimistic updates
-- ✅ Error handling and automatic rollback
-- ✅ Template rendering (ID references and inline HTML)
-- ✅ Dynamic value evaluation (`${this.dataset.*}`)
-- ✅ Snapshot and restore functionality
-- ✅ Error message handling (append vs replace)
-- ✅ Custom CSS classes
-- ✅ Conditional template expressions
-- ✅ Multiple attribute snapshotting
-- ✅ No-revert option (`revertDelay: 0`)
+## 🤝 Contributing
 
-### Interactive Examples
+1. Fork the repository
+2. Create a feature branch: `git checkout -b feature-name`
+3. Run tests: `npm test`
+4. Make your changes
+5. Submit a pull request
 
-To see the extension in action with working examples:
+## 📄 License
 
-```bash
-# Open the examples file
-open examples.html
-```
+MIT License - see [LICENSE](LICENSE) for details.
 
-The examples page includes mock server responses and demonstrates all major features with visual feedback.
+---
 
-## Size
-
-- Unminified: ~8KB
-- Minified: ~3.5KB
-- Gzipped: ~1.8KB
-
-## Contributing
-
-Contributions are welcome! Please feel free to submit a Pull Request.
-
-## License
-
-MIT License - see LICENSE file for details
-
-## Credits
-
-Created for use with [HTMX](https://htmx.org) by the community.
-
-## Changelog
-
-### 1.0.0
-
-- Initial release
-- Template support
-- Configurable rollback
-- Error handling
-- Simple expression evaluation
+**hx-optimistic** - Making HTMX interactions feel instant with intelligent optimistic updates. ⚡

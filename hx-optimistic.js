@@ -1,588 +1,390 @@
-/**
- * HTMX Optimistic Updates Extension
- * 
- * Provides optimistic UI updates with automatic rollback on errors.
- * No CSS included - you control all styling through the provided class names.
- * 
- * @version 1.0.0
- * @license MIT
- */
-(function() {
-  'use strict';
+(() => {
+  // src/constants.js
+  var CLASS_OPTIMISTIC = "hx-optimistic";
+  var CLASS_ERROR = "hx-optimistic-error";
+  var CLASS_REVERTING = "hx-optimistic-reverting";
+  var DATASET_OPTIMISTIC_KEY = "optimistic";
 
-  function defineExtension() {
-    // WeakMap to store snapshots for replaced elements
-    const snapshotStorage = new WeakMap();
-    
-    htmx.defineExtension('optimistic', {
-    onEvent: function(name, evt) {
-      const elt = evt.target;
-      
-      
-      // Early exit for irrelevant events
-      const relevantEvents = new Set([
-        'htmx:beforeRequest', 'htmx:responseError', 'htmx:swapError', 
-        'htmx:timeout', 'htmx:sendError', 'htmx:afterSwap'
-      ]);
-      if (!relevantEvents.has(name)) return;
-      
-      
-      // Handle afterSwap with precision cleanup
-      if (name === 'htmx:afterSwap') {
-        this.precisionCleanup(evt.target);
-        return;
+  // src/utils.js
+  function findClosestInAncestorSubtrees(startElt, selector) {
+    let node = startElt;
+    while (node) {
+      const match = node.querySelector(selector);
+      if (match) return match;
+      node = node.parentElement;
+    }
+    return null;
+  }
+  function interpolateTemplate(str, sourceElt, data = {}) {
+    if (typeof str !== "string") return str;
+    return str.replace(/\${([^}]+)}/g, (match, expr) => {
+      expr = expr.trim();
+      if (data[expr] !== void 0) {
+        return data[expr];
       }
-      
-      // For error events, we need to handle null targets differently
-      const isErrorEvent = ['htmx:responseError', 'htmx:swapError', 'htmx:timeout', 'htmx:sendError'].includes(name);
-      
-      if (!isErrorEvent) {
-        // Only handle other events for elements with data-optimistic attribute
-        if (!elt || !elt.dataset || !elt.dataset.optimistic) {
-          return;
-        }
-        
-        // Auto-detect and enhance config if needed
-        this.enhanceConfig(elt);
-      }
-      
-      // Check if element has hx-target and get the target element
-      let targetElement;
-      
-      if (!isErrorEvent && elt) {
-        const targetSelector = elt.getAttribute('hx-target');
-        
-        if (!targetSelector || targetSelector === 'this') {
-          targetElement = elt;
-        } else if (targetSelector.startsWith('closest ')) {
-          const selector = targetSelector.slice(8); // Remove 'closest '
-          targetElement = elt.closest(selector);
-        } else {
-          targetElement = document.querySelector(targetSelector);
+      if (!sourceElt) return match;
+      if (expr === "this.value") {
+        if (sourceElt.value !== void 0) return sourceElt.value;
+        if (sourceElt.tagName === "FORM") {
+          const input = sourceElt.querySelector("input, textarea, select");
+          if (input?.value) return input.value;
         }
       }
-      
-      switch(name) {
-        case 'htmx:beforeRequest':
-          if (!targetElement) {
-            console.warn('[hx-optimistic] Target element not found for:', elt);
-            return;
+      if (sourceElt.tagName === "FORM") {
+        const selectors = {
+          textarea: "textarea",
+          email: 'input[type="email"]',
+          password: 'input[type="password"]',
+          text: 'input[type="text"], input:not([type])',
+          url: 'input[type="url"]',
+          tel: 'input[type="tel"]',
+          search: 'input[type="search"]'
+        };
+        const selector = selectors[expr] || `[name="${expr}"]`;
+        const field = sourceElt.querySelector(selector);
+        if (field?.value) return field.value;
+      }
+      if (expr === "this.textContent") return sourceElt.textContent || match;
+      if (expr.startsWith("this.dataset.")) {
+        const key = expr.slice(13);
+        return sourceElt.dataset[key] || match;
+      }
+      if (expr.startsWith("data:")) {
+        const key = expr.slice(5);
+        const camelKey = key.replace(/-([a-z])/g, (m, l) => l.toUpperCase());
+        return sourceElt.dataset[camelKey] || match;
+      }
+      if (expr.startsWith("attr:")) {
+        const name = expr.slice(5);
+        return sourceElt.getAttribute(name) || match;
+      }
+      if (expr.includes(".") || expr.includes(":")) {
+        console.warn(
+          `[hx-optimistic] Unresolved interpolation pattern: \${${expr}}`,
+          "\nSupported patterns:",
+          "\n  ${this.value} - element value",
+          "\n  ${this.textContent} - element text content",
+          "\n  ${this.dataset.key} - data attribute",
+          "\n  ${data:key} - data attribute shorthand",
+          "\n  ${attr:name} - any attribute",
+          "\n  ${textarea}, ${email}, ${password}, etc. - form field by type",
+          "\n  ${fieldName} - form field by name",
+          "\n  ${status}, ${statusText}, ${error} - error context",
+          "\nSee documentation for details."
+        );
+      }
+      return match;
+    });
+  }
+  function resolveTargetChain(sourceElt, targetSelector) {
+    if (!targetSelector || targetSelector === "this") {
+      return sourceElt;
+    }
+    const selector = String(targetSelector).trim();
+    const ops = selector.split(/\s+/);
+    if (["closest", "find", "next", "previous"].some((op) => selector.startsWith(op))) {
+      let context = sourceElt;
+      for (let i = 0; i < ops.length; ) {
+        const op = ops[i++];
+        const sel = ops[i++] || "";
+        if (op === "closest") {
+          let candidate = context ? context.closest(sel) : null;
+          if (!candidate) {
+            candidate = findClosestInAncestorSubtrees(context, sel);
           }
-          // Concurrency protection: increment token
-          const currentToken = parseInt(targetElement.dataset.hxOptimisticToken || '0', 10);
-          const newToken = currentToken + 1;
-          targetElement.dataset.hxOptimisticToken = newToken;
-          elt.dataset.hxOptimisticRequestToken = newToken;
-          
-          this.snapshot(targetElement, elt);
-          this.applyOptimistic(targetElement, elt);
-          // Store reference to source element for later use
-          if (targetElement.dataset) {
-            targetElement.dataset.hxOptimisticSource = elt.id || Math.random().toString();
-            if (!elt.id) elt.id = targetElement.dataset.hxOptimisticSource;
-          }
-          break;
-          
-          
-        case 'htmx:responseError':
-        case 'htmx:swapError':
-        case 'htmx:timeout':
-        case 'htmx:sendError':
-          // For error events, get the triggering element and target from event detail
-          const triggeringElement = evt.detail?.elt || elt;
-          let actualTarget = evt.detail?.target;
-          
-          // If no target in detail, try to resolve from triggering element
-          if (!actualTarget && triggeringElement) {
-            const targetSelector = triggeringElement.getAttribute?.('hx-target');
-            if (!targetSelector || targetSelector === 'this') {
-              actualTarget = triggeringElement;
-            } else if (targetSelector.startsWith('closest ')) {
-              const selector = targetSelector.slice(8);
-              actualTarget = triggeringElement.closest(selector);
-            } else {
-              actualTarget = document.querySelector(targetSelector);
+          context = candidate;
+          if (!context) return null;
+        } else if (op === "find") {
+          if (!context) return null;
+          let found = context.querySelector(sel);
+          if (!found) {
+            let ancestor = context.parentElement;
+            while (ancestor && !found) {
+              found = ancestor.querySelector(sel);
+              if (found) break;
+              ancestor = ancestor.parentElement;
             }
           }
-          
-          
-          // For template-based updates, try to find error handling config from WeakMap snapshots
-          if (actualTarget) {
-            const errorSnapshot = snapshotStorage.get(actualTarget);
-            if (errorSnapshot && errorSnapshot.config) {
-              this.handleError(actualTarget, evt, errorSnapshot.sourceElement);
+          context = found || null;
+          if (!context) return null;
+        } else if (op === "next") {
+          if (!context) return null;
+          let next = context.nextElementSibling;
+          let match = null;
+          while (next) {
+            if (next.matches(sel)) {
+              match = next;
               break;
             }
+            next = next.nextElementSibling;
           }
-          
-          // Fallback to looking for source element with config
-          if (triggeringElement && triggeringElement.dataset && triggeringElement.dataset.optimistic) {
-            this.handleError(actualTarget || triggeringElement, evt, triggeringElement);
-          } else {
+          context = match;
+          if (!context) return null;
+        } else if (op === "previous") {
+          if (!context) return null;
+          let prev = context.previousElementSibling;
+          let match = null;
+          while (prev) {
+            if (prev.matches(sel)) {
+              match = prev;
+              break;
+            }
+            prev = prev.previousElementSibling;
           }
-          break;
-      }
-    },
-    
-    /**
-     * Snapshot current state before making changes
-     */
-    snapshot: function(elt, sourceElt) {
-      if (!elt) return;
-      sourceElt = sourceElt || elt;
-      const config = this.getConfig(sourceElt);
-      if (!config) return;
-      
-      const snapshotData = {
-        innerHTML: elt.innerHTML,
-        className: elt.className
-      };
-      
-      // Store textContent if explicitly requested
-      if (config.snapshot && config.snapshot.includes('textContent')) {
-        snapshotData.textContent = elt.textContent;
-      }
-      
-      // If using optimisticTemplate, store in WeakMap (element might be replaced)
-      if (config.optimisticTemplate) {
-        snapshotData.sourceElement = sourceElt;
-        snapshotData.config = config;
-        snapshotStorage.set(elt, snapshotData);
-      } else {
-        // Store on element dataset for simple updates
-        elt.dataset.hxOptimisticInnerHTML = snapshotData.innerHTML;
-        elt.dataset.hxOptimisticClassName = snapshotData.className;
-        if (snapshotData.textContent !== undefined) {
-          elt.dataset.hxOptimisticTextContent = snapshotData.textContent;
+          context = match;
+          if (!context) return null;
+        } else {
+          return null;
         }
       }
-    },
-    
-    /**
-     * Apply optimistic updates to the element
-     */
-    applyOptimistic: function(targetElt, sourceElt) {
-      // If no sourceElt provided, target and source are the same
-      sourceElt = sourceElt || targetElt;
-      if (!targetElt || !sourceElt) return;
-      const config = this.getConfig(sourceElt);
-      if (!config) {
-        return;
+      return context;
+    }
+    return document.querySelector(selector);
+  }
+  function setOptimisticStateClass(target, state) {
+    if (!target?.classList) return;
+    target.classList.remove(CLASS_OPTIMISTIC, CLASS_ERROR, CLASS_REVERTING);
+    if (state === "optimistic") target.classList.add(CLASS_OPTIMISTIC);
+    else if (state === "error") target.classList.add(CLASS_ERROR);
+    else if (state === "reverting") target.classList.add(CLASS_REVERTING);
+  }
+  function hasOptimisticConfig(element) {
+    return Boolean(element?.dataset?.[DATASET_OPTIMISTIC_KEY]);
+  }
+  function getTargetFor(sourceElt) {
+    const targetSelector = sourceElt.getAttribute("hx-target");
+    if (!targetSelector) return sourceElt;
+    return resolveTargetChain(sourceElt, targetSelector);
+  }
+  function getNextToken(targetElt, tokenMap) {
+    const currentToken = tokenMap.get(targetElt) || 0;
+    const newToken = currentToken + 1;
+    tokenMap.set(targetElt, newToken);
+    return newToken;
+  }
+  function processWithHtmxIfAvailable(element) {
+    if (typeof htmx !== "undefined" && typeof htmx.process === "function") {
+      htmx.process(element);
+    }
+  }
+  function removeOptimisticDatasetAttributes(target) {
+    if (!target?.dataset) return;
+    Object.keys(target.dataset).filter((key) => key.startsWith("hxOptimistic")).forEach((key) => delete target.dataset[key]);
+  }
+  function addCustomOptimisticClass(target, config) {
+    if (config && config.class && target?.classList) {
+      target.classList.add(config.class);
+    }
+  }
+  function removeCustomOptimisticClass(target, config) {
+    if (config && config.class && target?.classList) {
+      target.classList.remove(config.class);
+    }
+  }
+
+  // src/config.js
+  function getOptimisticConfig(sourceElt, cacheMap) {
+    if (!sourceElt?.dataset?.[DATASET_OPTIMISTIC_KEY]) return null;
+    const raw = sourceElt.dataset[DATASET_OPTIMISTIC_KEY];
+    const cached = cacheMap.get(sourceElt);
+    if (cached && cached.__raw === raw) {
+      return cached.config;
+    }
+    let config;
+    try {
+      if (raw === "true" || raw === "") {
+        config = {};
+      } else {
+        config = JSON.parse(raw);
+        if (typeof config !== "object" || config === null) {
+          config = { values: { textContent: raw } };
+        }
       }
-      
-      // Apply optimistic template if provided
-      if (config.optimisticTemplate) {
-        const template = this.getTemplate(config.optimisticTemplate);
-        if (template) {
-          // Store snapshot for target element too (in case target != source)
-          if (targetElt !== sourceElt) {
-            const sourceSnapshot = snapshotStorage.get(sourceElt);
-            if (sourceSnapshot) {
-              snapshotStorage.set(targetElt, sourceSnapshot);
+    } catch (e) {
+      config = { values: { textContent: raw } };
+    }
+    config.delay = config.delay ?? 2e3;
+    config.errorMode = config.errorMode || "replace";
+    config.errorMessage = config.errorMessage || "Request failed";
+    if (!config.values && !config.template && sourceElt.tagName === "BUTTON") {
+      config.values = {
+        className: (sourceElt.className + " hx-optimistic-pending").trim()
+      };
+    }
+    cacheMap.set(sourceElt, { __raw: raw, config });
+    return config;
+  }
+
+  // src/extension.js
+  function createExtension(htmx2) {
+    const configCache = /* @__PURE__ */ new WeakMap();
+    const snapshots = /* @__PURE__ */ new WeakMap();
+    const tokens = /* @__PURE__ */ new WeakMap();
+    const sourceTargets = /* @__PURE__ */ new WeakMap();
+    return {
+      onEvent: function(name, evt) {
+        if (name === "htmx:beforeRequest") {
+          this.handleBeforeRequest(evt);
+        } else if (["htmx:responseError", "htmx:swapError", "htmx:timeout", "htmx:sendError"].includes(name)) {
+          this.handleError(evt);
+        } else if (name === "htmx:afterSwap") {
+          this.cleanup(evt.target);
+        }
+      },
+      handleBeforeRequest: function(evt) {
+        const sourceElt = evt.target;
+        if (!hasOptimisticConfig(sourceElt)) return;
+        const config = getOptimisticConfig(sourceElt, configCache);
+        if (!config) return;
+        const targetElt = getTargetFor(sourceElt);
+        if (!targetElt) {
+          console.warn("[hx-optimistic] Target element not found for:", sourceElt);
+          return;
+        }
+        sourceTargets.set(sourceElt, targetElt);
+        const newToken = getNextToken(targetElt, tokens);
+        this.snapshot(targetElt, sourceElt, config, newToken);
+        this.applyOptimistic(targetElt, sourceElt, config);
+        setOptimisticStateClass(targetElt, "optimistic");
+        addCustomOptimisticClass(targetElt, config);
+      },
+      handleError: function(evt) {
+        const sourceElt = evt.detail?.elt || evt.target;
+        const targetSelector = sourceElt?.getAttribute("hx-target");
+        const targetElt = (targetSelector ? resolveTargetChain(sourceElt, targetSelector) : null) || sourceTargets.get(sourceElt) || sourceElt;
+        if (!targetElt) return;
+        const snapshot = snapshots.get(targetElt);
+        const config = snapshot?.config || getOptimisticConfig(sourceElt, configCache);
+        if (!config) return;
+        const currentToken = tokens.get(targetElt);
+        if (snapshot && snapshot.token !== currentToken) return;
+        setOptimisticStateClass(targetElt, "error");
+        this.showError(targetElt, config, evt);
+        if (config.delay > 0) {
+          setTimeout(() => this.revert(targetElt, currentToken), config.delay);
+        }
+      },
+      snapshot: function(targetElt, sourceElt, config, token) {
+        const snapshotData = {
+          innerHTML: targetElt.innerHTML,
+          className: targetElt.className,
+          config,
+          token
+        };
+        snapshots.set(targetElt, snapshotData);
+      },
+      applyOptimistic: function(targetElt, sourceElt, config) {
+        let optimisticTarget = targetElt;
+        if (config.target) {
+          const resolved = resolveTargetChain(sourceElt, config.target);
+          if (resolved) optimisticTarget = resolved;
+        }
+        if (config.template) {
+          const template = this.getTemplate(config.template);
+          if (template) {
+            const content = interpolateTemplate(template, sourceElt);
+            if (config.swap === "beforeend") {
+              optimisticTarget.insertAdjacentHTML("beforeend", content);
+            } else if (config.swap === "afterbegin") {
+              optimisticTarget.insertAdjacentHTML("afterbegin", content);
+            } else {
+              optimisticTarget.innerHTML = content;
+              processWithHtmxIfAvailable(optimisticTarget);
             }
           }
-          targetElt.innerHTML = this.renderTemplate(template, sourceElt);
+        } else if (config.values) {
+          this.applyValues(optimisticTarget, config.values, sourceElt);
         }
-      } 
-      // Apply individual values
-      else if (config.values) {
-        this.applyValues(targetElt, config.values, sourceElt);
-      }
-      
-      // Add optimistic class
-      targetElt.classList.add(config.class || 'hx-optimistic');
-    },
-    
-    /**
-     * Handle error responses
-     */
-    handleError: function(targetElt, evt, sourceElt) {
-      // If no sourceElt provided, target and source are the same
-      sourceElt = sourceElt || targetElt;
-      if (!targetElt || !sourceElt) {
-        return;
-      }
-      
-      // Try to get config from source element or from WeakMap snapshot
-      let config = this.getConfig(sourceElt);
-      const snapshot = snapshotStorage.get(targetElt) || snapshotStorage.get(sourceElt);
-      if (!config && snapshot && snapshot.config) {
-        config = snapshot.config;
-        sourceElt = snapshot.sourceElement || sourceElt;
-      }
-      if (!config) {
-        return;
-      }
-      
-      
-      // Apply error state
-      if (targetElt.classList) {
-        targetElt.classList.remove('hx-optimistic');
-        targetElt.classList.add('hx-optimistic-error');
-      }
-      
-      // Store current content if we're going to show error
-      if (!targetElt.dataset.hxOptimisticErrorShown) {
-        targetElt.dataset.hxOptimisticErrorShown = 'true';
-        
-        // Show error content if configured
+      },
+      showError: function(targetElt, config, evt) {
+        if (targetElt.dataset.hxOptimisticErrorShown) return;
+        targetElt.dataset.hxOptimisticErrorShown = "true";
         if (config.errorTemplate) {
           const template = this.getTemplate(config.errorTemplate);
           if (template) {
             const errorData = {
               status: evt.detail?.xhr?.status || 0,
-              statusText: evt.detail?.xhr?.statusText || 'Network Error',
-              error: evt.detail?.error || 'Request failed'
+              statusText: evt.detail?.xhr?.statusText || "Network Error",
+              error: evt.detail?.error || "Request failed"
             };
-            
-            if (config.errorTarget === 'append') {
-              const errorEl = document.createElement('div');
-              errorEl.className = 'hx-optimistic-error-message';
-              errorEl.innerHTML = this.renderTemplate(template, targetElt, errorData);
+            const source = evt.detail?.elt || evt.target;
+            const content = interpolateTemplate(template, source, errorData);
+            if (config.errorMode === "append") {
+              const errorEl = document.createElement("div");
+              errorEl.className = "hx-optimistic-error-message";
+              errorEl.innerHTML = content;
               targetElt.appendChild(errorEl);
             } else {
-              targetElt.innerHTML = this.renderTemplate(template, targetElt, errorData);
+              targetElt.innerHTML = content;
             }
           }
         } else if (config.errorMessage) {
-          if (config.errorTarget === 'append') {
-            const errorEl = document.createElement('div');
-            errorEl.className = 'hx-optimistic-error-message';
+          if (config.errorMode === "append") {
+            const errorEl = document.createElement("div");
+            errorEl.className = "hx-optimistic-error-message";
             errorEl.textContent = config.errorMessage;
             targetElt.appendChild(errorEl);
           } else {
             targetElt.textContent = config.errorMessage;
           }
         }
-      }
-      
-      // Schedule revert
-      const revertDelay = config.revertDelay !== undefined ? config.revertDelay : 1500;
-      if (revertDelay > 0) {
-        setTimeout(() => this.revertOptimistic(targetElt), revertDelay);
-      }
-    },
-    
-    /**
-     * Revert to original state
-     */
-    revertOptimistic: function(elt) {
-      if (!elt) return;
-      
-      
-      // Add reverting class for animations
-      elt.classList.add('hx-optimistic-reverting');
-      
-      // Check for snapshot in WeakMap first (for template-based updates)
-      const snapshot = snapshotStorage.get(elt);
-      if (snapshot) {
-        // Restore from WeakMap snapshot
-        if (snapshot.innerHTML !== undefined) {
-          elt.innerHTML = snapshot.innerHTML;
+      },
+      revert: function(targetElt, expectedToken) {
+        const snapshot = snapshots.get(targetElt);
+        if (!snapshot) return;
+        if (expectedToken !== void 0 && snapshot.token !== expectedToken) return;
+        setOptimisticStateClass(targetElt, "reverting");
+        if (snapshot.innerHTML !== void 0) targetElt.innerHTML = snapshot.innerHTML;
+        if (snapshot.className !== void 0) targetElt.className = snapshot.className;
+        snapshots.delete(targetElt);
+        tokens.delete(targetElt);
+        this.cleanup(targetElt);
+      },
+      cleanup: function(target) {
+        if (!target) return;
+        setOptimisticStateClass(target, "clean");
+        target.querySelectorAll(".hx-optimistic-error-message").forEach((msg) => msg.remove());
+        removeOptimisticDatasetAttributes(target);
+        const snap = snapshots.get(target);
+        if (snap && snap.config && snap.config.class) {
+          removeCustomOptimisticClass(target, snap.config);
         }
-        if (snapshot.className !== undefined) {
-          elt.className = snapshot.className;
+        if (snap) snapshots.delete(target);
+      },
+      getTemplate: function(templateId) {
+        if (templateId.startsWith("#")) {
+          const template = document.querySelector(templateId);
+          return template ? template.innerHTML : null;
         }
-        if (snapshot.textContent !== undefined) {
-          elt.textContent = snapshot.textContent;
-        }
-        // Clean up WeakMap entry
-        snapshotStorage.delete(elt);
-        
-        // Re-process HTMX attributes on restored content
-        if (typeof htmx !== 'undefined' && htmx.process) {
-          htmx.process(elt);
-        }
-      } else {
-        // Fallback to dataset-based snapshots (for simple updates)
-        if (elt.dataset.hxOptimisticInnerHTML !== undefined) {
-          elt.innerHTML = elt.dataset.hxOptimisticInnerHTML;
-          delete elt.dataset.hxOptimisticInnerHTML;
-        }
-        
-        if (elt.dataset.hxOptimisticClassName !== undefined) {
-          elt.className = elt.dataset.hxOptimisticClassName;
-          delete elt.dataset.hxOptimisticClassName;
-        }
-        
-        if (elt.dataset.hxOptimisticTextContent !== undefined) {
-          elt.textContent = elt.dataset.hxOptimisticTextContent;
-          delete elt.dataset.hxOptimisticTextContent;
-        }
-        
-        // Clean up all optimistic data attributes
-        Object.keys(elt.dataset)
-          .filter(key => key.startsWith('hxOptimistic'))
-          .forEach(key => delete elt.dataset[key]);
-          
-        // Re-process HTMX attributes on restored content
-        if (typeof htmx !== 'undefined' && htmx.process) {
-          htmx.process(elt);
-        }
-      }
-      
-      // Clean up classes
-      elt.classList.remove('hx-optimistic', 'hx-optimistic-error', 'hx-optimistic-reverting');
-      
-      // Remove error messages
-      const errorMsg = elt.querySelector('.hx-optimistic-error-message');
-      if (errorMsg) errorMsg.remove();
-    },
-    
-    /**
-     * Precision cleanup - only clean the swap target and its descendants
-     */
-    precisionCleanup: function(target) {
-      if (!target) return;
-      
-      // Clean the target itself
-      if (target.classList) {
-        target.classList.remove('hx-optimistic', 'hx-optimistic-error', 'optimistic-pending');
-      }
-      
-      // Clean descendants
-      const optimisticElements = target.querySelectorAll('.optimistic-pending, .hx-optimistic, .hx-optimistic-error');
-      optimisticElements.forEach(el => {
-        el.classList.remove('optimistic-pending', 'hx-optimistic', 'hx-optimistic-error');
-      });
-      
-      // Clean up stored original values
-      if (target.dataset) {
-        Object.keys(target.dataset)
-          .filter(key => key.startsWith('hxOptimistic'))
-          .forEach(key => delete target.dataset[key]);
-      }
-    },
-    
-    /**
-     * Auto-detect patterns and enhance config with smart defaults
-     */
-    enhanceConfig: function(elt) {
-      let config;
-      
-      const value = elt.dataset.optimistic;
-      if (value === 'true' || value === '') {
-        config = {};
-      } else {
-        try {
-          // Try to parse as JSON
-          config = JSON.parse(value);
-          // Ensure it's an object
-          if (typeof config !== 'object' || config === null) {
-            config = { values: { textContent: value } };
-          }
-        } catch (e) {
-          // Treat as simple text to show
-          config = { values: { textContent: value } };
-        }
-      }
-      
-      // Auto-detect element type and provide smart defaults
-      const tagName = elt.tagName.toLowerCase();
-      const inputType = elt.type;
-      
-      // Input elements - show their value optimistically
-      if (tagName === 'input' && (inputType === 'text' || inputType === 'email' || inputType === 'password')) {
-        if (!config.values && !config.optimisticTemplate) {
-          // Check if targeting a display element
-          const targetSelector = elt.getAttribute('hx-target');
-          const isTargetingDisplay = targetSelector && targetSelector.includes('display');
-          
-          if (isTargetingDisplay) {
-            // For display elements, get the input value from source element
-            config.values = config.values || {
-              textContent: '${this.value}',
-              className: 'optimistic-pending'
-            };
-          } else {
-            // For self-targeting inputs
-            config.values = config.values || {
-              textContent: '${this.value}',
-              className: (elt.className + ' optimistic-pending').trim()
-            };
-          }
-        }
-      }
-      
-      // Textarea elements
-      else if (tagName === 'textarea') {
-        if (!config.values && !config.optimisticTemplate) {
-          config.values = config.values || {
-            textContent: '${this.value}',
-            className: (elt.className + ' optimistic-pending').trim()
-          };
-        }
-      }
-      
-      // Button elements - show loading state or keep content
-      else if (tagName === 'button') {
-        if (!config.values && !config.optimisticTemplate) {
-          config.values = config.values || {
-            textContent: config.loadingText || 'Loading...',
-            className: (elt.className + ' optimistic-pending').trim()
-          };
-        }
-      }
-      
-      // Any other element - add optimistic class
-      else {
-        if (!config.values && !config.optimisticTemplate) {
-          config.values = config.values || {
-            className: (elt.className + ' optimistic-pending').trim()
-          };
-        }
-      }
-      
-      // Set default error handling
-      config.errorMessage = config.errorMessage || 'Request failed';
-      config.revertDelay = config.revertDelay !== undefined ? config.revertDelay : 2000;
-      
-      // Auto-detect target if not specified
-      if (!elt.getAttribute('hx-target')) {
-        // For inputs, target the input itself or a sibling display element
-        if (tagName === 'input' || tagName === 'textarea') {
-          // Look for a sibling with common display classes
-          const displaySibling = elt.previousElementSibling || elt.nextElementSibling;
-          if (displaySibling && (
-            displaySibling.classList.contains('display-text') ||
-            displaySibling.classList.contains('display') ||
-            displaySibling.classList.contains('value')
-          )) {
-            // Found a display sibling - target it specifically
-            if (elt.previousElementSibling && elt.previousElementSibling.classList.contains('display-text')) {
-              elt.setAttribute('hx-target', 'previous .display-text');
-            } else if (elt.nextElementSibling && elt.nextElementSibling.classList.contains('display-text')) {
-              elt.setAttribute('hx-target', 'next .display-text');
-            } else {
-              elt.setAttribute('hx-target', 'previous .display, next .display, previous .value, next .value');
-            }
-          } else {
-            elt.setAttribute('hx-target', 'this');
-          }
-        }
-      }
-      
-      // Store the enhanced config back
-      elt.dataset.optimistic = JSON.stringify(config);
-    },
-    
-    // Helper functions
-    
-    /**
-     * Get configuration from data-optimistic attribute
-     */
-    getConfig: function(elt) {
-      if (!elt || !elt.dataset || !elt.dataset.optimistic) return null;
-      try {
-        return JSON.parse(elt.dataset.optimistic);
-      } catch (e) {
-        return null;
-      }
-    },
-    
-    /**
-     * Get template content by ID or as inline string
-     */
-    getTemplate: function(templateId) {
-      // Support template element references
-      if (templateId.startsWith('#')) {
-        const template = document.querySelector(templateId);
-        return template ? template.innerHTML : null;
-      }
-      // Treat as inline HTML string
-      return templateId;
-    },
-    
-    /**
-     * Render template with simple placeholder substitution
-     */
-    renderTemplate: function(template, elt, data) {
-      data = data || {};
-      
-      // Simple template rendering - only support direct placeholders
-      return template.replace(/\${([^}]+)}/g, (match, expr) => {
-        expr = expr.trim();
-        
-        // Direct data properties: status, statusText, error
-        if (data[expr] !== undefined) {
-          return data[expr];
-        }
-        
-        // Element value: ${this.value}
-        if (expr === 'this.value' && elt.value !== undefined) {
-          return elt.value;
-        }
-        
-        // Dataset properties: ${this.dataset.foo}
-        if (expr.startsWith('this.dataset.')) {
-          const dataKey = expr.slice(13);
-          return elt.dataset[dataKey] || match;
-        }
-        
-        return match;
-      });
-    },
-    
-    /**
-     * Apply values to element properties
-     */
-    applyValues: function(targetElt, values, sourceElt) {
-      sourceElt = sourceElt || targetElt;
-      Object.entries(values).forEach(([key, value]) => {
-        const evaluated = this.evaluateValue(value, sourceElt);
-        
-        if (key === 'textContent') {
-          targetElt.textContent = evaluated;
-        } else if (key === 'innerHTML') {
-          targetElt.innerHTML = evaluated;
-        } else if (key === 'className') {
-          targetElt.className = evaluated;
-        } else if (key.startsWith('data-')) {
-          targetElt.dataset[key.slice(5)] = evaluated;
-        } else {
-          targetElt[key] = evaluated;
-        }
-      });
-    },
-    
-    /**
-     * Evaluate simple placeholders in config values
-     */
-    evaluateValue: function(value, elt) {
-      if (typeof value !== 'string') return value;
-      
-      // Simple placeholder evaluation - no dynamic expressions
-      if (value.includes('${')) {
-        return value.replace(/\${([^}]+)}/g, (match, expr) => {
-          expr = expr.trim();
-          
-          // Element value
-          if (expr === 'this.value' && elt.value !== undefined) {
-            return elt.value;
-          }
-          
-          // Dataset properties
-          if (expr.startsWith('this.dataset.')) {
-            const dataKey = expr.slice(13);
-            return elt.dataset[dataKey] || match;
-          }
-          
-          return match;
+        return templateId;
+      },
+      applyValues: function(targetElt, values, sourceElt) {
+        Object.entries(values).forEach(([key, value]) => {
+          const evaluated = interpolateTemplate(value, sourceElt);
+          if (key === "textContent") targetElt.textContent = evaluated;
+          else if (key === "innerHTML") targetElt.innerHTML = evaluated;
+          else if (key === "className") targetElt.className = evaluated;
+          else if (key.startsWith("data-")) targetElt.dataset[key.slice(5)] = evaluated;
+          else targetElt[key] = evaluated;
         });
       }
-      return value;
-    }
-    });
+    };
   }
 
-  // Wait for HTMX to be available
-  if (typeof htmx !== 'undefined') {
-    defineExtension();
-  } else if (document.readyState === 'loading') {
-    document.addEventListener('DOMContentLoaded', function() {
-      if (typeof htmx !== 'undefined') {
-        defineExtension();
+  // src/index.js
+  (function() {
+    "use strict";
+    function define() {
+      if (typeof htmx !== "undefined") {
+        htmx.defineExtension("optimistic", createExtension(htmx));
       }
-    });
-  }
+    }
+    if (typeof htmx !== "undefined") {
+      define();
+    } else if (document.readyState === "loading") {
+      document.addEventListener("DOMContentLoaded", function() {
+        if (typeof htmx !== "undefined") define();
+      });
+    }
+  })();
 })();
