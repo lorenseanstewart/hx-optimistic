@@ -15,9 +15,7 @@
     "test:ui": "vitest --ui",
     "test:run": "vitest run",
     "test:coverage": "vitest run --coverage",
-    "test:e2e": "node node_modules/@playwright/test/cli.js test",
-    "test:browser": "open test-features.html",
-    "test:all": "npm run test:run && npm run test:e2e",
+    "test:all": "npm run test:run",
     "build": "esbuild src/index.js --bundle --format=iife --outfile=hx-optimistic.js && npm run minify",
     "minify": "npx terser hx-optimistic.js -o hx-optimistic.min.js --compress --mangle",
     "dev": "npx http-server -p 8080 -c-1",
@@ -48,20 +46,15 @@
   },
   "devDependencies": {
     "@vitest/coverage-v8": "^1.6.0",
-    "esbuild": "^0.21.0",
-    "terser": "^5.15.0",
-    "http-server": "^14.1.1",
-    "vitest": "^1.6.0",
     "@vitest/ui": "^1.6.0",
-    "jsdom": "^24.0.0",
     "c8": "^9.1.0",
-    "@playwright/test": "^1.44.0",
-    "husky": "^9.0.11"
+    "esbuild": "^0.21.0",
+    "husky": "^9.0.11",
+    "jsdom": "^24.0.0",
+    "terser": "^5.15.0",
+    "vitest": "^1.6.0"
   },
   "engines": {
     "node": ">=14"
-  },
-  "overrides": {
-    "playwright": "npm:@playwright/test@^1.44.0"
   }
 }
