@@ -208,7 +208,7 @@ Use `<template>` elements for better organization:
 ```
 
 ## 🎮 Live Demo
-[View the demo](https://hx-optimistic-demo.example.com)
+[View the demo](https://hx-optimistic-demo.com)
 
 ## 🤝 Contributing
 
