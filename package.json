@@ -20,7 +20,7 @@
     "test:all": "npm run test:run && npm run test:e2e",
     "build": "esbuild src/index.js --bundle --format=iife --outfile=hx-optimistic.js && npm run minify",
     "minify": "npx terser hx-optimistic.js -o hx-optimistic.min.js --compress --mangle",
-    "dev": "npx http-server -p 8080 -o test.html",
+    "dev": "npx http-server -p 8080 -c-1",
     "prepublishOnly": "npm run build && npm run test:run"
   },
   "keywords": [
@@ -47,6 +47,7 @@
     "htmx.org": "^1.9.0"
   },
   "devDependencies": {
+    "@vitest/coverage-v8": "^1.6.0",
     "esbuild": "^0.21.0",
     "terser": "^5.15.0",
     "http-server": "^14.1.1",

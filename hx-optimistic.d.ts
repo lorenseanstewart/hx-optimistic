@@ -19,18 +19,6 @@ declare global {
  */
 export interface OptimisticConfig {
   /**
-   * Properties to snapshot before making optimistic changes
-   * @example ["textContent", "innerHTML", "className", "data-state"]
-   */
-  snapshot?: string[];
-
-  /**
-   * When true, automatically preserves the entire innerHTML for complex rollbacks
-   * Use for elements with rich content that will be completely replaced by templates
-   */
-  snapshotContent?: boolean;
-
-  /**
    * Simple property updates to apply immediately when request starts
    * @example { "textContent": "Loading...", "className": "btn loading" }
    */
@@ -46,9 +34,18 @@ export interface OptimisticConfig {
   template?: string;
 
   /**
-   * Alternative name for template property
+   * Optional selector chain (e.g. "closest .card", "find .target") to resolve the optimistic target
+   * If omitted, uses the source element or hx-target when provided on the element
    */
-  optimisticTemplate?: string;
+  target?: string;
+
+  /**
+   * How to swap template content
+   * - replace: sets innerHTML
+   * - beforeend: insertAdjacentHTML('beforeend')
+   * - afterbegin: insertAdjacentHTML('afterbegin')
+   */
+  swap?: 'replace' | 'beforeend' | 'afterbegin';
 
   /**
    * Custom CSS class to apply during optimistic update
@@ -78,28 +75,11 @@ export interface OptimisticConfig {
   errorMode?: 'replace' | 'append';
 
   /**
-   * Alternative name for errorMode property
-   */
-  errorTarget?: 'replace' | 'append';
-
-  /**
    * Milliseconds before reverting to original state
    * Set to 0 to disable automatic revert
    * @default 2000
    */
   delay?: number;
-
-  /**
-   * Alternative name for delay property
-   */
-  revertDelay?: number;
-
-  /**
-   * Text to show for button elements during loading
-   * Only used for smart defaults when no values/template provided
-   * @default "Loading..."
-   */
-  loadingText?: string;
 }
 
 /**
@@ -140,15 +120,13 @@ interface OptimisticExtension {
   onEvent(name: string, evt: Event): void;
   handleBeforeRequest(evt: Event): void;
   handleError(evt: Event): void;
-  handleAfterSwap(evt: Event): void;
   showError(targetElt: Element, config: OptimisticConfig, evt: Event): void;
-  snapshot(elt: Element, sourceElt?: Element, token?: number): void;
-  applyOptimistic(targetElt: Element, sourceElt?: Element): void;
-  revertOptimistic(elt: Element, expectedToken?: number): void;
+  snapshot(targetElt: Element, sourceElt: Element, config: OptimisticConfig, token: number): void;
+  applyOptimistic(targetElt: Element, sourceElt: Element, config: OptimisticConfig): void;
+  revert(targetElt: Element, expectedToken?: number): void;
   cleanup(target: Element): void;
-  precisionCleanup(target: Element): void;
   getTemplate(templateId: string): string | null;
-  applyValues(targetElt: Element, values: Record<string, string>, sourceElt?: Element): void;
+  applyValues(targetElt: Element, values: Record<string, string>, sourceElt: Element): void;
 }
 
 /**

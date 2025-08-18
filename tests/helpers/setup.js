@@ -7,6 +7,7 @@ import { beforeAll, afterEach, vi } from 'vitest';
 import fs from 'fs';
 import path from 'path';
 import { fileURLToPath } from 'url';
+import vm from 'vm';
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
@@ -55,8 +56,7 @@ beforeAll(() => {
   const extensionCode = fs.readFileSync(extensionPath, 'utf8');
   
   try {
-    // Execute the extension code in the global context
-    eval(extensionCode);
+    vm.runInThisContext(extensionCode, { filename: extensionPath });
     
     // Verify the extension was loaded
     if (!global.htmx.extensions.optimistic) {
