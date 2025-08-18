@@ -10,17 +10,23 @@ A lightweight HTMX extension for optimistic UI updates with automatic rollback o
 - 🎨 **Template Support** - Rich HTML templates for loading and error states
 - ⚠️ **Developer Warnings** - Console warnings for unsupported patterns
 - 🚫 **No CSS Required** - You control all styling through provided class names
-- 📦 **Tiny** - Only **13.5KB** uncompressed, **8.8KB** minified, **3.1KB** gzipped
+- 📦 **Tiny** - Only **14.7KB** uncompressed, **6.6KB** minified, **2.5KB** gzipped
 - 🔧 **Highly Configurable** - Fine-tune behavior per element
 
 ## 🚀 Quick Start
 
 ### Installation
 
-**Via CDN:**
+**Via CDN (jsDelivr, pinned major):**
 ```html
-<script src="https://unpkg.com/htmx.org"></script>
-<script src="https://cdn.jsdelivr.net/npm/hx-optimistic@latest/hx-optimistic.min.js"></script>
+<script src="https://unpkg.com/htmx.org@2"></script>
+<script src="https://cdn.jsdelivr.net/npm/hx-optimistic@1/hx-optimistic.min.js"></script>
+```
+
+Alternative (unpkg, pin exact version):
+```html
+<script src="https://unpkg.com/htmx.org@2"></script>
+<script src="https://unpkg.com/hx-optimistic@1.0.0/hx-optimistic.min.js"></script>
 ```
 
 **Via NPM:**
@@ -48,6 +54,14 @@ Enable the extension and add optimistic behavior to any HTMX element:
 
 ## 🎯 Core Concepts
 
+## 📦 Bundle Size
+
+| Artifact | Size |
+|---------|------|
+| Unminified (`hx-optimistic.js`) | 14.7 KB |
+| Minified (`hx-optimistic.min.js`) | 6.6 KB |
+| Minified + gzip | 2.5 KB |
+
 ### Values vs Templates
 
 **Values** - Perfect for simple optimistic updates:
@@ -60,7 +74,7 @@ Enable the extension and add optimistic behavior to any HTMX element:
   hx-swap="outerHTML"
   data-optimistic='{
     "values": {
-      "textContent": "❤️ Liked! (${count + 1})",  // Show liked state with +1 count
+      "textContent": "❤️ Liked! (was ${data:count})",
       "className": "btn liked",
       "data-liked": "true"
     }
@@ -101,11 +115,13 @@ All `${...}` patterns supported in templates and values:
 |---------|-------------|---------|
 | `${this.value}` | Element's input value | `"Saving: ${this.value}"` |
 | `${this.textContent}` | Element's text content | `"Was: ${this.textContent}"` |
+| `${this.dataset.key}` | Data attribute via dataset | `"ID: ${this.dataset.userId}"` |
 | `${textarea}` | First textarea in form | `"Comment: ${textarea}"` |
 | `${email}` | First email input | `"Email: ${email}"` |
 | `${data:key}` | Data attribute shorthand | `"Count: ${data:count}"` |
 | `${attr:name}` | Any HTML attribute | `"ID: ${attr:id}"` |
 | `${status}` | HTTP status (errors only) | `"Error ${status}"` |
+| `${statusText}` | HTTP status text (errors only) | `"Error: ${statusText}"` |
 | `${error}` | Error message (errors only) | `"Failed: ${error}"` |
 
 **Form Field Helpers:**
@@ -116,13 +132,8 @@ All `${...}` patterns supported in templates and values:
 
 Complete configuration reference for `data-optimistic`:
 
-### Snapshot Options
-```javascript
-{
-  "snapshot": ["textContent", "className", "data-count"],  // Specific properties
-  "snapshotContent": true  // Full innerHTML backup
-}
-```
+### Snapshot Behavior
+innerHTML and className are automatically captured and restored on revert; no configuration is required.
 
 ### Optimistic Updates
 ```javascript
@@ -152,51 +163,15 @@ Complete configuration reference for `data-optimistic`:
 
 ## 🎨 CSS Classes
 
-Style the different states with these automatically applied classes:
+This library does not include any CSS. These classes are applied so you can style them as you wish:
 
-```css
-/* During optimistic update */
-.hx-optimistic {
-  opacity: 0.8;
-  background-color: #bfdbfe;
-  box-shadow: 0 0 0 2px #3b82f6;
-  transition: all 0.2s ease-in-out;
-}
-
-/* During error state */
-.hx-optimistic-error {
-  background-color: #fee2e2;
-  color: #dc2626;
-  box-shadow: 0 0 0 2px #ef4444;
-}
-
-/* During revert animation */
-.hx-optimistic-reverting {
-  animation: fadeBack 0.3s ease-out;
-}
-
-/* Appended error messages */
-.hx-optimistic-error-message {
-  padding: 0.5rem;
-  margin-top: 0.25rem;
-  background: #fee2e2;
-  color: #dc2626;
-  border-radius: 0.25rem;
-}
-```
+- `hx-optimistic`: applied during the optimistic update
+- `hx-optimistic-error`: applied when an error is shown
+- `hx-optimistic-reverting`: applied while reverting to the snapshot
+- `hx-optimistic-error-message`: wrapper added when errorMode is "append"
 
 ## 📚 Examples
-
-For comprehensive examples and patterns, see the [demo documentation](demo/README.md) which includes:
-
-- **Like Button** - Toggle states with counter updates
-- **Comment System** - Input interpolation with `${textarea}` 
-- **Inline Editing** - Click-to-edit with validation
-- **Status Toggle** - Rich templates with attribute helpers
-- **Product Rating** - Complex data interpolation patterns
-- **Error Handling** - Different error modes and recovery
-
-Each example includes complete working code, API endpoints, and detailed explanations of the patterns used.
+See usage snippets above for common patterns.
 
 ## 🔧 Developer Features
 
@@ -232,23 +207,8 @@ Use `<template>` elements for better organization:
 </button>
 ```
 
-## 🎮 Interactive Demo
-
-Explore all features with the comprehensive demo:
-
-```bash
-cd demo/
-npm install
-npm run dev
-# Visit http://localhost:4321
-```
-
-The demo includes:
-- Live examples of all patterns
-- Error simulation for testing
-- Developer console warnings
-- Complete code explanations
-- Copy-paste ready configurations
+## 🎮 Live Demo
+[View the demo](https://hx-optimistic-demo.example.com)
 
 ## 🤝 Contributing
 
@@ -257,6 +217,18 @@ The demo includes:
 3. Run tests: `npm test`
 4. Make your changes
 5. Submit a pull request
+
+## 📦 Release
+
+Tag-based releases trigger npm publish in CI:
+
+1. Update version in `package.json` if needed
+2. Create a tag and push it:
+```bash
+git tag v1.0.0
+git push origin v1.0.0
+```
+3. Ensure `NPM_TOKEN` is set in GitHub Actions secrets
 
 ## 📄 License
 
