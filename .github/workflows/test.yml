@@ -59,10 +59,15 @@ jobs:
       run: npm ci
     
     - name: Install Playwright browsers
-      run: npx playwright install --with-deps
+      run: npx @playwright/test install --with-deps
     
     - name: Run E2E tests
       run: npm run test:e2e
+    - name: Debug Playwright versions
+      if: failure()
+      run: |
+        npx @playwright/test --version || true
+        node -e "try{console.log('has playwright:',!!require.resolve('playwright'))}catch(e){console.log('has playwright:false')}"
     
     - name: Upload test results
       if: always()
