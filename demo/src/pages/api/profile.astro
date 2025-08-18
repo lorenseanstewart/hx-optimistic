@@ -1,0 +1,36 @@
+---
+import InterpolationShowcase from "../../components/InterpolationShowcase.astro";
+
+// Parse form data
+const formData = await Astro.request.formData();
+const username = formData.get("username") as string;
+const level = parseInt(formData.get("level") as string) || 1;
+const status = formData.get("status") as string;
+const userName = formData.get("userName") as string || "User";
+const userLevel = parseInt(formData.get("userLevel") as string) || 1;
+
+// Validate data
+if (username && username.length < 3) {
+  return new Response("Username must be at least 3 characters", { status: 422 });
+}
+
+if (status && status.length > 100) {
+  return new Response("Status message too long", { status: 422 });
+}
+
+// 20% chance of error for demonstration
+if (Math.random() < 0.2) {
+  return new Response("Server Error", { status: 500 });
+}
+
+// Return updated component with new values
+const updatedUserName = username || userName;
+const updatedLevel = level || userLevel;
+const updatedStatus = status || "Available";
+---
+
+<InterpolationShowcase 
+  userName={updatedUserName}
+  userLevel={updatedLevel}
+  status={updatedStatus}
+/>

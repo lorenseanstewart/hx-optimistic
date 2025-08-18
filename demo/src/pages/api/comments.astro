@@ -1,0 +1,88 @@
+---
+import CommentSystem from "../../components/CommentSystem.astro";
+
+// Parse form data
+const formData = await Astro.request.formData();
+const commentText = formData.get("comment") as string;
+
+// Validation
+if (!commentText || commentText.trim().length === 0) {
+  return new Response("Comment cannot be empty", { status: 422 });
+}
+
+if (commentText.trim().length > 500) {
+  return new Response("Comment too long (max 500 characters)", { status: 422 });
+}
+
+// 25% chance of error for demonstration
+if (Math.random() < 0.2) {
+  return new Response("Failed to post comment. Please try again.", {
+    status: 500,
+  });
+}
+
+// Simulate processing time
+await new Promise((resolve) => setTimeout(resolve, 600));
+
+// Create new comment with server timestamp
+const newComment = {
+  id: crypto.randomUUID(),
+  author: "You",
+  text: commentText.trim(),
+  timestamp: new Date().toLocaleTimeString("en-US", {
+    hour: "2-digit",
+    minute: "2-digit",
+  }),
+};
+
+// Simple in-memory comment store for demo (use a database in production)
+if (!globalThis.commentStore) {
+  globalThis.commentStore = [
+    {
+      id: "1",
+      author: "Alice",
+      text: "This is really helpful, thanks for sharing!",
+      timestamp: "2:30 PM",
+    },
+    {
+      id: "2",
+      author: "Bob",
+      text: "I had the same question. Great explanation!",
+      timestamp: "2:45 PM",
+    },
+  ];
+}
+
+// Add new comment to the persistent store
+globalThis.commentStore.push(newComment);
+const allComments = [...globalThis.commentStore];
+
+// Check if this is targeting just the comments list (for appending)
+const hxTarget = Astro.request.headers.get("HX-Target");
+const isAppendRequest = hxTarget === ".comments-list";
+---
+
+{
+  isAppendRequest ? (
+    <div class="comment border-l-4 border-gray-200 bg-gray-50 p-4 mb-4">
+      <div class="flex items-start gap-3">
+        <div class="avatar placeholder">
+          <div class="bg-gray-500 text-white rounded-full w-10 h-10 flex items-center justify-center">
+            <span class="text-sm font-bold">
+              {newComment.author.charAt(0).toUpperCase()}
+            </span>
+          </div>
+        </div>
+        <div class="flex-1">
+          <div class="flex items-center gap-2 mb-1">
+            <span class="font-semibold text-gray-700">{newComment.author}</span>
+            <span class="text-xs text-gray-500">{newComment.timestamp}</span>
+          </div>
+          <p class="text-gray-800">{newComment.text}</p>
+        </div>
+      </div>
+    </div>
+  ) : (
+    <CommentSystem comments={allComments} />
+  )
+}

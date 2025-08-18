@@ -1,0 +1,103 @@
+---
+// WarningsDemo.astro - Demonstrates developer warning system
+---
+
+<div class="card bg-orange-50 border border-orange-200 p-6 mb-4">
+  <h4 class="text-lg font-semibold mb-4 text-orange-800">
+    🔧 Developer Warnings Demo
+  </h4>
+  <p class="text-sm text-orange-700 mb-4">
+    Open your browser's Developer Console and click these buttons to see helpful warning messages for unsupported interpolation patterns.
+  </p>
+
+  <div class="space-y-4">
+    <!-- Button with unsupported querySelector pattern -->
+    <button
+      class="btn btn-warning btn-sm"
+      hx-post="/api/demo-warnings"
+      hx-target="next .result"
+      hx-ext="optimistic"
+      data-optimistic={JSON.stringify({
+        values: {
+          textContent: "Finding element: $" + "{this.querySelector('.nonexistent')}"
+        },
+        errorMessage: "Request failed",
+        delay: 2000
+      })}
+    >
+      Try Unsupported querySelector
+    </button>
+    <div class="result text-sm"></div>
+
+    <!-- Button with unsupported window reference -->
+    <button
+      class="btn btn-warning btn-sm"
+      hx-post="/api/demo-warnings"
+      hx-target="next .result"
+      hx-ext="optimistic"
+      data-optimistic={JSON.stringify({
+        values: {
+          textContent: "Current URL: $" + "{window.location.href}"
+        },
+        errorMessage: "Request failed",
+        delay: 2000
+      })}
+    >
+      Try Unsupported window Reference
+    </button>
+    <div class="result text-sm"></div>
+
+    <!-- Button with unsupported method call -->
+    <button
+      class="btn btn-warning btn-sm"
+      hx-post="/api/demo-warnings"
+      hx-target="next .result"
+      hx-ext="optimistic"
+      data-optimistic={JSON.stringify({
+        values: {
+          textContent: "Parsed: $" + "{JSON.parse(this.dataset.config)}"
+        },
+        errorMessage: "Request failed",
+        delay: 2000
+      })}
+    >
+      Try Unsupported Method Call
+    </button>
+    <div class="result text-sm"></div>
+
+    <!-- Button with supported patterns for comparison -->
+    <button
+      class="btn btn-success btn-sm"
+      data-demo-value="Success!"
+      hx-post="/api/demo-warnings"
+      hx-target="next .result"
+      hx-ext="optimistic"
+      data-optimistic={JSON.stringify({
+        values: {
+          textContent: "✅ Supported: $" + "{data:demo-value} and $" + "{this.textContent}"
+        },
+        errorMessage: "Request failed",
+        delay: 2000
+      })}
+    >
+      Try Supported Patterns (No Warnings)
+    </button>
+    <div class="result text-sm text-green-600"></div>
+  </div>
+
+  <div class="mt-4 p-3 bg-orange-100 rounded">
+    <h5 class="font-medium text-orange-800 mb-2">Expected Console Output:</h5>
+    <pre class="text-xs text-orange-700 whitespace-pre-wrap">
+[hx-optimistic] Unresolved interpolation pattern: $&#123;this.querySelector('.nonexistent')&#125;
+Supported patterns:
+  $&#123;this.value&#125; - element value
+  $&#123;this.textContent&#125; - element text content
+  $&#123;this.dataset.key&#125; - data attribute
+  $&#123;data:key&#125; - data attribute shorthand
+  $&#123;attr:name&#125; - any attribute
+  $&#123;Math.max(0, count)&#125; - arithmetic with count
+  $&#123;status&#125;, $&#123;statusText&#125;, $&#123;error&#125; - error context
+See documentation for details.
+    </pre>
+  </div>
+</div>

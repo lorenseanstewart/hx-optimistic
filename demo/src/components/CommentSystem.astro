@@ -1,0 +1,194 @@
+---
+// CommentSystem.astro - demonstrates input interpolation and append error mode
+export interface Props {
+  comments?: Array<{
+    id: string;
+    author: string;
+    text: string;
+    timestamp: string;
+  }>;
+}
+
+const { comments = [] } = Astro.props;
+
+const optimisticConfig = {
+  template: "#comment-optimistic-template",
+  errorTemplate: "#comment-error-template", 
+  errorMode: "append",
+  delay: 3000,
+  target: ".comments-list",
+  swap: "beforeend",
+};
+---
+
+<!-- Template elements for optimistic updates -->
+<template id="comment-optimistic-template">
+  <!-- New optimistic comment that will be added to the existing comments list -->
+  <div class="comment hx-optimistic border-l-4 border-blue-400 bg-blue-50 p-4 mb-4">
+    <div class="flex items-start gap-3">
+      <div class="avatar placeholder">
+        <div class="bg-blue-500 text-white rounded-full w-10 h-10 flex items-center justify-center">
+          <span class="text-sm font-bold">Y</span>
+        </div>
+      </div>
+      <div class="flex-1">
+        <div class="flex items-center gap-2 mb-1">
+          <span class="font-semibold text-blue-700">You</span>
+          <span class="text-xs text-blue-600">posting...</span>
+        </div>
+        <p class="text-gray-800">$&#123;textarea&#125;</p>
+      </div>
+    </div>
+  </div>
+</template>
+
+<template id="comment-error-template">
+  <div class="alert alert-error mt-2">
+    <span class="text-sm">❌ $&#123;error&#125;</span>
+  </div>
+</template>
+
+<div class="comment-system bg-white rounded-lg border border-gray-200 p-6">
+  <h4 class="text-lg font-semibold mb-4 text-gray-900">Discussion</h4>
+  
+  <!-- Existing comments -->
+  <div class="comments-list mb-6">
+    {comments.map((comment) => (
+      <div class="comment border-l-4 border-gray-200 bg-gray-50 p-4 mb-4">
+        <div class="flex items-start gap-3">
+          <div class="avatar placeholder">
+            <div class="bg-gray-500 text-white rounded-full w-10 h-10 flex items-center justify-center">
+              <span class="text-sm font-bold">{comment.author.charAt(0).toUpperCase()}</span>
+            </div>
+          </div>
+          <div class="flex-1">
+            <div class="flex items-center gap-2 mb-1">
+              <span class="font-semibold text-gray-700">{comment.author}</span>
+              <span class="text-xs text-gray-500">{comment.timestamp}</span>
+            </div>
+            <p class="text-gray-800">{comment.text}</p>
+          </div>
+        </div>
+      </div>
+    ))}
+  </div>
+
+  <!-- Comment form -->
+  <div class="comment-form">
+    <h5 class="font-medium mb-3 text-gray-700">Add a comment</h5>
+    <form 
+      class="comment-input-wrapper"
+      hx-post="/api/comments"
+      hx-target="closest .comment-system"
+      hx-swap="outerHTML"
+      hx-ext="optimistic"
+      data-optimistic={JSON.stringify(optimisticConfig)}
+    >
+      <textarea
+        name="comment"
+        class="w-full p-3 border border-gray-300 rounded-lg resize-none focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
+        rows="3"
+        placeholder="Share your thoughts..."
+        required
+      ></textarea>
+      
+      <div class="flex justify-between items-center mt-3">
+        <span class="text-sm text-gray-500">
+          💡 Try: "Great post!" or leave empty to see validation
+        </span>
+        <button 
+          type="submit"
+          class="btn btn-primary"
+        >
+          Post Comment
+        </button>
+      </div>
+    </form>
+  </div>
+</div>
+
+<style>
+  .comment-system {
+    max-width: 100%;
+  }
+  
+  /* Stabilize layout during optimistic updates */
+  .comment-form {
+    min-height: 200px; /* Ensure consistent height */
+    transition: all 0.3s ease-out;
+  }
+  
+  .btn {
+    padding: 0.5rem 1rem;
+    border-radius: 0.375rem;
+    font-weight: 500;
+    border: none;
+    cursor: pointer;
+    transition: all 0.2s;
+  }
+  
+  .btn-primary {
+    background-color: #3b82f6;
+    color: white;
+  }
+  
+  .btn-primary:hover:not(:disabled) {
+    background-color: #2563eb;
+  }
+  
+  .btn:disabled {
+    cursor: not-allowed;
+  }
+  
+  .alert {
+    padding: 0.75rem;
+    border-radius: 0.375rem;
+    border: 1px solid;
+  }
+  
+  .alert-error {
+    background-color: #fee2e2;
+    color: #dc2626;
+    border-color: #fecaca;
+  }
+  
+  /* Optimistic comment styling - distinct blue theme */
+  .comment.hx-optimistic {
+    animation: slideIn 0.3s ease-out;
+    border-left-color: #3b82f6 !important;
+    background-color: #dbeafe !important;
+  }
+  
+  .comment.hx-optimistic .bg-blue-500 {
+    background-color: #2563eb !important;
+  }
+  
+  .comment.hx-optimistic .text-blue-700 {
+    color: #1d4ed8 !important;
+  }
+  
+  /* Smooth transitions for form states */
+  .comment-input-wrapper {
+    transition: opacity 0.2s ease-out;
+  }
+  
+  .comments-list {
+    /* Prevent layout shift during comment additions */
+    min-height: 0;
+  }
+  
+  @keyframes slideIn {
+    from {
+      opacity: 0;
+      transform: translateY(-10px);
+      max-height: 0;
+      overflow: hidden;
+    }
+    to {
+      opacity: 1;
+      transform: translateY(0);
+      max-height: 200px;
+      overflow: visible;
+    }
+  }
+</style>

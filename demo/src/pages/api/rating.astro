@@ -1,0 +1,33 @@
+---
+// Parse form data
+const formData = await Astro.request.formData();
+const rating = parseInt(formData.get("rating") as string);
+const productId = formData.get("productId") as string;
+
+// Validation
+if (!rating || rating < 1 || rating > 5) {
+  return new Response("Invalid rating", { status: 422 });
+}
+
+if (!productId) {
+  return new Response("Product ID required", { status: 422 });
+}
+
+// 25% chance of error for demonstration
+if (Math.random() < 0.25) {
+  return new Response("Failed to save rating. Please try again.", { status: 500 });
+}
+
+// Simulate processing time
+await new Promise(resolve => setTimeout(resolve, 800));
+---
+
+<div class="rating-success p-4 bg-success text-success-content rounded-lg">
+  <div class="flex items-center gap-3">
+    <svg class="w-5 h-5" fill="currentColor" viewBox="0 0 20 20">
+      <path fill-rule="evenodd" d="M10 18a8 8 0 100-16 8 8 0 000 16zm3.707-9.293a1 1 0 00-1.414-1.414L9 10.586 7.707 9.293a1 1 0 00-1.414 1.414l2 2a1 1 0 001.414 0l4-4z" clip-rule="evenodd" />
+    </svg>
+    <span class="font-medium">Rating saved successfully!</span>
+  </div>
+  <p class="mt-2 text-sm opacity-90">You rated this product {rating} star{rating !== 1 ? 's' : ''}. Thanks for your feedback!</p>
+</div>

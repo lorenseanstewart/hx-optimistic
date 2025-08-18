@@ -1,0 +1,410 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>hx-optimistic v1.0 Test Suite</title>
+  
+  <!-- Test Framework -->
+  <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/mocha/9.2.2/mocha.min.css">
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/mocha/9.2.2/mocha.min.js"></script>
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/chai/4.3.7/chai.min.js"></script>
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/sinon.js/15.2.0/sinon.min.js"></script>
+  
+  <!-- HTMX -->
+  <script src="https://unpkg.com/htmx.org@1.9.10/dist/htmx.min.js"></script>
+  
+  <!-- Extension under test -->
+  <script src="./hx-optimistic.js"></script>
+  
+  <style>
+    #test-container {
+      display: none;
+    }
+    
+    .hx-optimistic {
+      background: yellow;
+    }
+    
+    .hx-optimistic-error {
+      background: red;
+      color: white;
+    }
+    
+    .hx-optimistic-reverting {
+      opacity: 0.5;
+    }
+    
+    #mocha {
+      margin: 20px;
+    }
+  </style>
+</head>
+<body>
+  <div id="mocha"></div>
+  <div id="test-container"></div>
+  
+  <!-- Test templates -->
+  <template id="test-loading-template">
+    <div class="loading">Loading...</div>
+  </template>
+  
+  <template id="test-error-template">
+    <div class="error">Error ${status}: ${statusText}</div>
+  </template>
+  
+  <script>
+    // Wait for all scripts to load
+    window.addEventListener('load', function() {
+      mocha.setup('bdd');
+      
+      const expect = chai.expect;
+      let container;
+      let server;
+      
+      describe('hx-optimistic v1.0 Extension', function() {
+        
+        beforeEach(function() {
+          container = document.getElementById('test-container');
+          container.innerHTML = '';
+          server = sinon.createFakeServer();
+          server.respondImmediately = false;
+        });
+        
+        afterEach(function() {
+          server.restore();
+          container.innerHTML = '';
+        });
+        
+        describe('Basic Optimistic Updates', function() {
+          it('should apply optimistic class on request', function(done) {
+            container.innerHTML = `
+              <button hx-post="/api/test"
+                      hx-ext="optimistic"
+                      data-optimistic='{"values": {"textContent": "Loading..."}}'
+                      id="test-btn">
+                Click me
+              </button>
+            `;
+            
+            const btn = document.getElementById('test-btn');
+            htmx.process(btn);
+            
+            btn.click();
+            
+            setTimeout(() => {
+              expect(btn.classList.contains('hx-optimistic')).to.be.true;
+              expect(btn.textContent).to.equal('Loading...');
+              done();
+            }, 10);
+          });
+          
+          it('should use WeakMap for storage (not dataset)', function(done) {
+            container.innerHTML = `
+              <button hx-post="/api/test" 
+                      hx-ext="optimistic" 
+                      data-optimistic='{"snapshot": ["textContent"], "values": {"textContent": "Loading..."}}' 
+                      id="test-btn">Original Text</button>
+            `;
+            
+            const btn = document.getElementById('test-btn');
+            htmx.process(btn);
+            
+            server.respondWith('POST', '/api/test', [200, {}, 'OK']);
+            
+            btn.click();
+            
+            setTimeout(() => {
+              // Should NOT store in dataset anymore (v1.0 uses WeakMaps)
+              expect(btn.dataset.hxOptimisticTextContent).to.be.undefined;
+              done();
+            }, 50);
+          });
+        });
+        
+        describe('New Interpolation Features', function() {
+          it('should support ${attr:name} helper', function(done) {
+            container.innerHTML = `
+              <a href="/test" title="Test Link" 
+                 hx-post="/api/test"
+                 hx-ext="optimistic"
+                 data-optimistic='{"values": {"textContent": "Link: \${attr:href} - \${attr:title}"}}'
+                 id="test-link">Click me</a>
+            `;
+            
+            const link = document.getElementById('test-link');
+            htmx.process(link);
+            
+            link.click();
+            
+            setTimeout(() => {
+              expect(link.textContent).to.equal('Link: /test - Test Link');
+              done();
+            }, 10);
+          });
+          
+          it('should support ${data:name} shorthand', function(done) {
+            container.innerHTML = `
+              <button data-user="john" data-id="123"
+                      hx-post="/api/test"
+                      hx-ext="optimistic"
+                      data-optimistic='{"values": {"textContent": "User: \${data:user} (ID: \${data:id})"}}'
+                      id="test-btn">Click</button>
+            `;
+            
+            const btn = document.getElementById('test-btn');
+            htmx.process(btn);
+            
+            btn.click();
+            
+            setTimeout(() => {
+              expect(btn.textContent).to.equal('User: john (ID: 123)');
+              done();
+            }, 10);
+          });
+          
+          it('should support ${this.textContent}', function(done) {
+            container.innerHTML = `
+              <div hx-post="/api/test"
+                   hx-ext="optimistic"
+                   data-optimistic='{"values": {"title": "Previous: \${this.textContent}"}}'
+                   id="test-div">Original Content</div>
+            `;
+            
+            const div = document.getElementById('test-div');
+            htmx.process(div);
+            
+            div.click();
+            
+            setTimeout(() => {
+              expect(div.title).to.equal('Previous: Original Content');
+              done();
+            }, 10);
+          });
+        });
+        
+        describe('Arithmetic Evaluation', function() {
+          it('should evaluate Math.max with count variable', function(done) {
+            container.innerHTML = `
+              <button data-count="3"
+                      hx-post="/api/test"
+                      hx-ext="optimistic"
+                      data-optimistic='{"values": {"textContent": "Count: \${Math.max(0, count - 1)}"}}'
+                      id="test-btn">Click</button>
+            `;
+            
+            const btn = document.getElementById('test-btn');
+            htmx.process(btn);
+            
+            btn.click();
+            
+            setTimeout(() => {
+              expect(btn.textContent).to.equal('Count: 2');
+              done();
+            }, 10);
+          });
+          
+          it('should evaluate complex arithmetic', function(done) {
+            container.innerHTML = `
+              <button data-count="5"
+                      hx-post="/api/test"
+                      hx-ext="optimistic"
+                      data-optimistic='{"values": {"textContent": "Result: \${(count + 3) * 2}"}}'
+                      id="test-btn">Click</button>
+            `;
+            
+            const btn = document.getElementById('test-btn');
+            htmx.process(btn);
+            
+            btn.click();
+            
+            setTimeout(() => {
+              expect(btn.textContent).to.equal('Result: 16'); // (5 + 3) * 2 = 16
+              done();
+            }, 10);
+          });
+        });
+        
+        describe('Updated API Names', function() {
+          it('should support "template" instead of "optimisticTemplate"', function(done) {
+            container.innerHTML = `
+              <button hx-post="/api/test"
+                      hx-ext="optimistic"
+                      data-optimistic='{"template": "#test-loading-template"}'
+                      id="test-btn">Click me</button>
+            `;
+            
+            const btn = document.getElementById('test-btn');
+            htmx.process(btn);
+            
+            btn.click();
+            
+            setTimeout(() => {
+              expect(btn.innerHTML).to.include('Loading...');
+              done();
+            }, 10);
+          });
+          
+          it('should support "delay" instead of "revertDelay"', function(done) {
+            this.timeout(2000);
+            
+            container.innerHTML = `
+              <button hx-post="/api/test"
+                      hx-ext="optimistic"
+                      data-optimistic='{"errorMessage": "Failed", "delay": 100}'
+                      id="test-btn">Click me</button>
+            `;
+            
+            const btn = document.getElementById('test-btn');
+            htmx.process(btn);
+            
+            server.respondWith('POST', '/api/test', [500, {}, 'Server Error']);
+            
+            btn.click();
+            
+            setTimeout(() => {
+              server.respond();
+              setTimeout(() => {
+                // Should revert after delay
+                expect(btn.textContent).to.not.equal('Failed');
+                done();
+              }, 200);
+            }, 10);
+          });
+          
+          it('should support "errorMode" instead of "errorTarget"', function(done) {
+            container.innerHTML = `
+              <button hx-post="/api/test"
+                      hx-ext="optimistic"
+                      data-optimistic='{"errorMessage": "Error occurred", "errorMode": "append", "delay": 0}'
+                      id="test-btn">Original</button>
+            `;
+            
+            const btn = document.getElementById('test-btn');
+            htmx.process(btn);
+            
+            server.respondWith('POST', '/api/test', [500, {}, 'Error']);
+            
+            btn.click();
+            
+            setTimeout(() => {
+              server.respond();
+              setTimeout(() => {
+                // Should append error message
+                const errorMsg = btn.querySelector('.hx-optimistic-error-message');
+                expect(errorMsg).to.exist;
+                expect(errorMsg.textContent).to.equal('Error occurred');
+                done();
+              }, 50);
+            }, 10);
+          });
+        });
+        
+        describe('Developer Warnings', function() {
+          it('should warn about unsupported patterns', function(done) {
+            const warnSpy = sinon.spy(console, 'warn');
+            
+            container.innerHTML = `
+              <button hx-post="/api/test"
+                      hx-ext="optimistic"
+                      data-optimistic='{"values": {"textContent": "\${window.location.href}"}}'
+                      id="test-btn">Click</button>
+            `;
+            
+            const btn = document.getElementById('test-btn');
+            htmx.process(btn);
+            
+            btn.click();
+            
+            setTimeout(() => {
+              expect(warnSpy.called).to.be.true;
+              expect(warnSpy.getCall(0).args[0]).to.include('Unresolved interpolation pattern');
+              warnSpy.restore();
+              done();
+            }, 10);
+          });
+        });
+        
+        describe('Target Resolution', function() {
+          it('should support "closest" selector', function(done) {
+            container.innerHTML = `
+              <div class="parent" id="parent">
+                <button hx-post="/api/test"
+                        hx-target="closest .parent"
+                        hx-ext="optimistic"
+                        data-optimistic='{"values": {"className": "parent updated"}}'
+                        id="test-btn">Click</button>
+              </div>
+            `;
+            
+            const btn = document.getElementById('test-btn');
+            const parent = document.getElementById('parent');
+            htmx.process(btn);
+            
+            btn.click();
+            
+            setTimeout(() => {
+              expect(parent.className).to.equal('parent updated');
+              done();
+            }, 10);
+          });
+          
+          it('should support "find" selector', function(done) {
+            container.innerHTML = `
+              <div>
+                <button hx-post="/api/test"
+                        hx-target="find .target"
+                        hx-ext="optimistic"
+                        data-optimistic='{"values": {"textContent": "Found and updated"}}'
+                        id="test-btn">Click</button>
+                <div class="target" id="target">Original</div>
+              </div>
+            `;
+            
+            const btn = document.getElementById('test-btn');
+            const target = document.getElementById('target');
+            htmx.process(btn);
+            
+            btn.click();
+            
+            setTimeout(() => {
+              expect(target.textContent).to.equal('Found and updated');
+              done();
+            }, 10);
+          });
+        });
+        
+        describe('Error Template Variables', function() {
+          it('should interpolate error variables', function(done) {
+            container.innerHTML = `
+              <button hx-post="/api/test"
+                      hx-ext="optimistic"
+                      data-optimistic='{"errorTemplate": "#test-error-template", "delay": 100}'
+                      id="test-btn">Click me</button>
+            `;
+            
+            const btn = document.getElementById('test-btn');
+            htmx.process(btn);
+            
+            server.respondWith('POST', '/api/test', [404, {}, 'Not Found']);
+            
+            btn.click();
+            
+            setTimeout(() => {
+              server.respond();
+              setTimeout(() => {
+                expect(btn.innerHTML).to.include('Error 404');
+                expect(btn.innerHTML).to.include('Not Found');
+                done();
+              }, 50);
+            }, 10);
+          });
+        });
+      });
+      
+      // Run tests
+      mocha.run();
+    });
+  </script>
+</body>
+</html>

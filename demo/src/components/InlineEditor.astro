@@ -1,0 +1,120 @@
+---
+// InlineEditor.astro - demonstrates blur-triggered inline editing
+export interface Props {
+  text: string;
+}
+
+const { text } = Astro.props;
+---
+
+<div class="editable-wrapper">
+  <span
+    class="display-text"
+    onclick="this.style.display='none'; 
+               this.nextElementSibling.style.display='inline-block';
+               this.nextElementSibling.focus();
+               this.nextElementSibling.select();"
+  >
+    {text}
+  </span>
+  <input
+    class="edit-input"
+    style="display: none"
+    type="text"
+    name="text"
+    value={text}
+    hx-patch="/api/edit" 
+    hx-trigger="blur, keyup[key=='Enter'] consume"
+    hx-target="closest .editable-wrapper"
+    onkeydown="if(event.key==='Enter') event.preventDefault();"
+    data-optimistic='{"template":"#inline-edit-optimistic","snapshotContent":true}'
+  />
+</div>
+
+<template id="inline-edit-optimistic" set:html={`
+  <span
+    class="display-text optimistic-pending"
+    onclick="this.style.display='none'; 
+               this.nextElementSibling.style.display='inline-block';
+               this.nextElementSibling.focus();
+               this.nextElementSibling.select();"
+  >
+    \${this.value}
+  </span>
+  <input
+    class="edit-input"
+    style="display: none"
+    type="text"
+    name="text"
+    value="\${this.value}"
+    hx-patch="/api/edit" 
+    hx-trigger="blur, keyup[key=='Enter'] consume"
+    hx-target="closest .editable-wrapper"
+    onkeydown="if(event.key==='Enter') event.preventDefault();"
+    data-optimistic='{"template":"#inline-edit-optimistic","snapshotContent":true}'
+  />
+`}>
+</template>
+
+<style is:global>
+  .editable-wrapper {
+    display: inline-block;
+    cursor: pointer;
+    padding: 0.5rem;
+    border-radius: 0.375rem;
+    border: 2px dashed transparent;
+    transition: all 0.2s ease;
+    min-width: 200px;
+  }
+
+  .editable-wrapper:hover {
+    border-color: #d1d5db;
+    background: #f9fafb;
+  }
+
+  .editable-wrapper .display-text {
+    color: #374151;
+    font-weight: 500;
+    transition: all 0.2s ease;
+  }
+
+  .editable-wrapper .display-text.optimistic-pending {
+    color: #3b82f6;
+    font-weight: 600;
+    background: rgba(59, 130, 246, 0.1);
+    padding: 0.25rem 0.5rem;
+    border-radius: 0.25rem;
+    border: 1px solid rgba(59, 130, 246, 0.3);
+  }
+
+  .editable-wrapper .edit-input {
+    width: 100%;
+    padding: 0.25rem 0.5rem;
+    border: 1px solid #3b82f6;
+    border-radius: 0.25rem;
+    font-family: inherit;
+    font-size: inherit;
+    outline: none;
+    box-shadow: 0 0 0 3px rgba(59, 130, 246, 0.1);
+  }
+
+  .editable-wrapper .save-error {
+    color: #dc2626;
+    font-weight: 500;
+  }
+
+  .editable-wrapper .btn-link {
+    background: none;
+    border: none;
+    color: #3b82f6;
+    text-decoration: underline;
+    cursor: pointer;
+    font-size: inherit;
+    padding: 0;
+    margin-left: 0.25rem;
+  }
+
+  .editable-wrapper .btn-link:hover {
+    color: #2563eb;
+  }
+</style>
