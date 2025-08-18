@@ -1,0 +1,48 @@
+{
+  "name": "hx-optimistic",
+  "version": "1.0.0",
+  "description": "HTMX extension for optimistic UI updates with automatic rollback on errors",
+  "main": "hx-optimistic.js",
+  "files": [
+    "hx-optimistic.js",
+    "hx-optimistic.min.js",
+    "README.md"
+  ],
+  "scripts": {
+    "test": "open test.html",
+    "build": "npm run minify",
+    "minify": "npx terser hx-optimistic.js -o hx-optimistic.min.js --compress --mangle",
+    "dev": "npx http-server -p 8080 -o test.html",
+    "prepublishOnly": "npm run build"
+  },
+  "keywords": [
+    "htmx",
+    "extension",
+    "optimistic",
+    "ui",
+    "updates",
+    "rollback",
+    "javascript",
+    "frontend"
+  ],
+  "author": "HTMX Community",
+  "license": "MIT",
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/your-org/hx-optimistic.git"
+  },
+  "bugs": {
+    "url": "https://github.com/your-org/hx-optimistic/issues"
+  },
+  "homepage": "https://github.com/your-org/hx-optimistic#readme",
+  "peerDependencies": {
+    "htmx.org": "^1.9.0"
+  },
+  "devDependencies": {
+    "terser": "^5.15.0",
+    "http-server": "^14.1.1"
+  },
+  "engines": {
+    "node": ">=14"
+  }
+}

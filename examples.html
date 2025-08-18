@@ -1,0 +1,601 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>hx-optimistic Examples</title>
+    <script src="https://unpkg.com/htmx.org@1.9.10"></script>
+    <script src="./hx-optimistic.js"></script>
+    <style>
+      body {
+        font-family:
+          system-ui,
+          -apple-system,
+          sans-serif;
+        max-width: 800px;
+        margin: 0 auto;
+        padding: 2rem;
+        line-height: 1.6;
+      }
+
+      .example {
+        margin: 2rem 0;
+        padding: 1.5rem;
+        border: 1px solid #e5e7eb;
+        border-radius: 0.5rem;
+        background: #f9fafb;
+      }
+
+      .example h3 {
+        margin-top: 0;
+      }
+
+      /* Extension classes */
+      .hx-optimistic {
+        background: #fef3c7;
+        opacity: 0.8;
+        transition: all 0.2s ease;
+      }
+
+      .hx-optimistic-error {
+        background: #fee2e2;
+        color: #dc2626;
+      }
+
+      .hx-optimistic-reverting {
+        animation: fadeBack 0.3s ease-out;
+      }
+
+      .hx-optimistic-error-message {
+        padding: 0.5rem;
+        margin-top: 0.5rem;
+        background: #fee2e2;
+        color: #dc2626;
+        border-radius: 0.25rem;
+        font-size: 0.875rem;
+      }
+
+      @keyframes fadeBack {
+        from {
+          transform: scale(1.05);
+          opacity: 0.5;
+        }
+        to {
+          transform: scale(1);
+          opacity: 1;
+        }
+      }
+
+      /* UI Components */
+      .btn {
+        padding: 0.5rem 1rem;
+        border: 1px solid #d1d5db;
+        border-radius: 0.375rem;
+        background: white;
+        cursor: pointer;
+        margin: 0.25rem;
+      }
+
+      .btn:hover {
+        background: #f3f4f6;
+      }
+
+      .btn.primary {
+        background: #3b82f6;
+        color: white;
+        border-color: #3b82f6;
+      }
+
+      .btn.liked {
+        background: #ef4444;
+        color: white;
+      }
+
+      .card {
+        border: 1px solid #e5e7eb;
+        border-radius: 0.5rem;
+        padding: 1rem;
+        margin: 1rem 0;
+      }
+
+      .form-field {
+        margin: 1rem 0;
+      }
+
+      .form-field label {
+        display: block;
+        font-weight: 500;
+        margin-bottom: 0.25rem;
+      }
+
+      .form-field input {
+        width: 100%;
+        padding: 0.5rem;
+        border: 1px solid #d1d5db;
+        border-radius: 0.375rem;
+      }
+
+      .status {
+        font-size: 0.875rem;
+        margin-top: 0.25rem;
+      }
+
+      .status.success {
+        color: #16a34a;
+      }
+      .status.error {
+        color: #dc2626;
+      }
+      .status.pending {
+        color: #f59e0b;
+      }
+
+      .editable {
+        cursor: pointer;
+        padding: 0.25rem;
+        border-radius: 0.25rem;
+        border: 1px dashed transparent;
+      }
+
+      .editable:hover {
+        border-color: #d1d5db;
+      }
+
+      .counter {
+        display: flex;
+        align-items: center;
+        gap: 1rem;
+      }
+
+      .quantity-display {
+        min-width: 3rem;
+        text-align: center;
+        font-weight: bold;
+      }
+
+      .spinner {
+        width: 1rem;
+        height: 1rem;
+        border: 2px solid #f3f3f3;
+        border-top: 2px solid #3b82f6;
+        border-radius: 50%;
+        animation: spin 1s linear infinite;
+      }
+
+      @keyframes spin {
+        0% {
+          transform: rotate(0deg);
+        }
+        100% {
+          transform: rotate(360deg);
+        }
+      }
+
+      .loading {
+        display: flex;
+        align-items: center;
+        gap: 0.5rem;
+      }
+
+      .alert {
+        padding: 1rem;
+        border-radius: 0.375rem;
+        margin: 0.5rem 0;
+      }
+
+      .alert.success {
+        background: #dcfce7;
+        color: #16a34a;
+        border: 1px solid #bbf7d0;
+      }
+
+      .alert.error {
+        background: #fee2e2;
+        color: #dc2626;
+        border: 1px solid #fecaca;
+      }
+    </style>
+  </head>
+  <body hx-ext="optimistic">
+    <h1>hx-optimistic Examples</h1>
+
+    <p>
+      These examples demonstrate various use cases for the hx-optimistic
+      extension. All requests are mocked to show different behaviors.
+    </p>
+
+    <div class="example">
+      <h3>1. Simple Like Button</h3>
+      <p>
+        Toggle like/unlike - <strong>errors occur randomly</strong> to
+        demonstrate error handling and reversion.
+      </p>
+      <p>
+        <small>Request count: <span id="like-count">0</span></small>
+      </p>
+
+      <button
+        class="btn"
+        data-liked="false"
+        data-count="42"
+        hx-post="/mock/like"
+        hx-target="this"
+        data-optimistic='{
+              "snapshot": ["textContent"],
+              "values": {
+                "textContent": "❤️ Liked! (43)",
+                "className": "btn liked",
+                "data-liked": "true",
+                "data-count": "43"
+              },
+              "errorMessage": "Could not like post",
+              "revertDelay": 2000
+            }'
+      >
+        🤍 Like (42)
+      </button>
+    </div>
+
+    <div class="example">
+      <h3>2. Counter with Math</h3>
+      <p>Increment counter with optimistic updates.</p>
+
+      <div class="counter">
+        <button
+          class="btn"
+          onclick="updateCounter(-1)"
+        >
+          −
+        </button>
+
+        <span
+          class="quantity-display"
+          data-count="5"
+          hx-patch="/mock/counter"
+          hx-trigger="update-counter"
+          data-optimistic='{
+              "snapshot": ["textContent"],
+              "values": {
+                "textContent": "${this.dataset.count}"
+              }
+            }'
+        >
+          5
+        </span>
+
+        <button
+          class="btn"
+          onclick="updateCounter(1)"
+        >
+          +
+        </button>
+      </div>
+    </div>
+
+    <div class="example">
+      <h3>3. Form with Rich Templates</h3>
+
+      <!-- Templates -->
+      <template id="form-submitting">
+        <div class="loading">
+          <div class="spinner"></div>
+          <span>Sending message...</span>
+        </div>
+      </template>
+
+      <template id="form-error">
+        <div class="alert error">
+          <h4>Message failed to send</h4>
+          <p>Error ${status}: ${statusText}</p>
+          <button onclick="location.reload()">Try Again</button>
+        </div>
+      </template>
+
+      <form
+        hx-post="/mock/contact"
+        data-optimistic='{
+            "snapshotContent": true,
+            "optimisticTemplate": "#form-submitting",
+            "errorTemplate": "#form-error",
+            "revertDelay": 3000
+          }'
+      >
+        <div class="form-field">
+          <label>Email</label>
+          <input type="email" name="email" required />
+        </div>
+        <div class="form-field">
+          <label>Message</label>
+          <textarea name="message" required rows="4"></textarea>
+        </div>
+        <button type="submit" class="btn primary">Send Message</button>
+      </form>
+    </div>
+
+    <div class="example">
+      <h3>4. Inline Editing</h3>
+      <p>Click the text below to edit it.</p>
+
+      <div
+        class="editable"
+        hx-patch="/mock/edit"
+        hx-trigger="blur from:input"
+        hx-target="this"
+        data-optimistic='{
+           "snapshotContent": true,
+           "optimisticTemplate": "<span style=\"color: #f59e0b;\">💾 Saving...</span>",
+           "errorTemplate": "<span style=\"color: #dc2626;\">❌ Failed to save</span>",
+           "revertDelay": 2000
+         }'
+      >
+        <span
+          onclick="this.style.display='none'; 
+                     this.nextElementSibling.style.display='block';
+                     this.nextElementSibling.focus();
+                     this.nextElementSibling.select();"
+        >
+          Click to edit this text
+        </span>
+        <input
+          style="display: none"
+          type="text"
+          value="Click to edit this text"
+          onblur="this.style.display='none';
+                     this.previousElementSibling.style.display='block';"
+        />
+      </div>
+    </div>
+
+    <div class="example">
+      <h3>5. Field Validation</h3>
+
+      <div class="form-field">
+        <label>Email Address</label>
+        <input
+          type="email"
+          name="email"
+          placeholder="Enter your email"
+          hx-patch="/mock/validate"
+          hx-trigger="blur changed"
+          hx-target="next .status"
+          data-optimistic='{
+               "optimisticTemplate": "<span class=\"status pending\">Validating...</span>",
+               "errorTemplate": "<span class=\"status error\">❌ Invalid email format</span>",
+               "revertDelay": 2000
+             }'
+        />
+        <div class="status"></div>
+      </div>
+    </div>
+
+    <div class="example">
+      <h3>6. Shopping Cart Item</h3>
+
+      <template id="adding-to-cart">
+        <div class="loading">
+          <div class="spinner"></div>
+          <span>Adding to cart...</span>
+        </div>
+      </template>
+
+      <template id="cart-error">
+        <div class="alert error">
+          <h4>Could not add to cart</h4>
+          <p>
+            ${status === 409 ? "Item already in cart" : "Please try again
+            later"}
+          </p>
+        </div>
+      </template>
+
+      <div class="card">
+        <h4>Awesome Product</h4>
+        <p>$29.99</p>
+        <button
+          class="btn primary"
+          hx-post="/mock/cart/add"
+          data-optimistic='{
+                "snapshotContent": true,
+                "optimisticTemplate": "#adding-to-cart",
+                "errorTemplate": "#cart-error",
+                "revertDelay": 3000
+              }'
+        >
+          Add to Cart
+        </button>
+      </div>
+    </div>
+
+    <div class="example">
+      <h3>7. Append Error Messages</h3>
+      <p>Error messages are appended instead of replacing content.</p>
+
+      <div class="card">
+        <h4>Important Action</h4>
+        <p>This action might fail and show an error message below.</p>
+        <button
+          class="btn"
+          hx-post="/mock/important-action"
+          data-optimistic='{
+                "values": {
+                  "textContent": "Processing..."
+                },
+                "errorMessage": "Action failed - please try again",
+                "errorTarget": "append",
+                "revertDelay": 4000
+              }'
+        >
+          Execute Action
+        </button>
+      </div>
+    </div>
+
+    <!-- Mock server responses -->
+    <script>
+      // Mock server for demo purposes
+      let requestCount = 0;
+
+      // Intercept HTMX requests and provide mock responses
+      document.body.addEventListener("htmx:beforeRequest", function (evt) {
+        requestCount++;
+
+        // Update like counter display
+        const likeCountDisplay = document.getElementById("like-count");
+        if (likeCountDisplay) {
+          likeCountDisplay.textContent = requestCount;
+        }
+
+        const xhr = evt.detail.xhr;
+        const url = new URL(evt.detail.requestConfig.path, window.location)
+          .pathname;
+
+        // Mock XMLHttpRequest implementation
+        const originalOpen = xhr.open;
+        const originalSend = xhr.send;
+
+        xhr.open = function (method, url, async) {
+          // Don't actually open real connection
+        };
+
+        xhr.send = function (data) {
+          setTimeout(
+            () => {
+              // Simulate various responses based on URL
+              if (url.includes("/mock/like")) {
+                // 40% chance of failure to demonstrate error handling
+                const shouldFail = Math.random() < 0.4;
+
+                if (shouldFail) {
+                  console.log("Simulating like error");
+                  xhr.status = 500;
+                  xhr.statusText = "Server Error";
+                  xhr.responseText = "Server Error";
+                  htmx.trigger(evt.detail.elt, "htmx:responseError", {
+                    xhr: xhr,
+                    error: "Server Error",
+                  });
+                } else {
+                  console.log("Simulating like success");
+                  xhr.status = 200;
+                  xhr.statusText = "OK";
+
+                  // Simple response: toggle to opposite state
+                  const btn = evt.detail.elt;
+                  const isLiked = btn.dataset.liked === 'true';
+                  const currentCount = parseInt(btn.dataset.count || '42');
+                  const newCount = isLiked ? currentCount - 1 : currentCount + 1;
+                  const newLiked = !isLiked;
+                  
+                  xhr.responseText = `<button class="btn ${newLiked ? 'liked' : ''}"
+                        data-liked="${newLiked}"
+                        data-count="${newCount}"
+                        hx-post="/mock/like"
+                        hx-target="this"
+                        hx-ext="optimistic"
+                        data-optimistic='{
+                          "snapshot": ["textContent"],
+                          "values": {
+                            "textContent": "${newLiked ? '❤️ Liked! (' + (newCount + 1) + ')' : '🤍 Like (' + (newCount - 1) + ')'}",
+                            "className": "${newLiked ? 'btn liked' : 'btn'}",
+                            "data-liked": "${!newLiked}",
+                            "data-count": "${newLiked ? newCount + 1 : newCount - 1}"
+                          },
+                          "errorMessage": "Could not update like",
+                          "revertDelay": 2000
+                        }'>${newLiked ? '❤️ Liked! (' + newCount + ')' : '🤍 Like (' + newCount + ')'}</button>`;
+
+                  xhr.readyState = 4;
+                  if (xhr.onreadystatechange) {
+                    xhr.onreadystatechange();
+                  }
+                  
+                  // Process new element
+                  setTimeout(() => {
+                    const newElement = document.querySelector('[hx-post="/mock/like"]');
+                    if (newElement) {
+                      htmx.process(newElement);
+                    }
+                  }, 50);
+                }
+              } else if (url.includes("/mock/counter")) {
+                xhr.status = 200;
+                xhr.statusText = "OK";
+                xhr.responseText =
+                  '<span class="quantity-display" data-count="6">6</span>';
+                xhr.readyState = 4;
+                if (xhr.onreadystatechange) xhr.onreadystatechange();
+              } else if (url.includes("/mock/contact")) {
+                xhr.status = 500;
+                xhr.statusText = "Internal Server Error";
+                xhr.responseText = "Internal Server Error";
+                htmx.trigger(evt.detail.elt, "htmx:responseError", {
+                  xhr: xhr,
+                  error: "Internal Server Error",
+                });
+              } else if (url.includes("/mock/edit")) {
+                if (Math.random() > 0.5) {
+                  xhr.status = 422;
+                  xhr.statusText = "Validation Error";
+                  xhr.responseText = "Validation Error";
+                  htmx.trigger(evt.detail.elt, "htmx:responseError", {
+                    xhr: xhr,
+                    error: "Validation Error",
+                  });
+                } else {
+                  xhr.status = 200;
+                  xhr.statusText = "OK";
+                  xhr.responseText =
+                    '<span onclick="this.style.display=\'none\'; this.nextElementSibling.style.display=\'block\'; this.nextElementSibling.focus(); this.nextElementSibling.select();">Updated text value</span><input style="display:none" type="text" value="Updated text value" onblur="this.style.display=\'none\'; this.previousElementSibling.style.display=\'block\';">';
+                  xhr.readyState = 4;
+                  if (xhr.onreadystatechange) xhr.onreadystatechange();
+                }
+              } else if (url.includes("/mock/validate")) {
+                xhr.status = 422;
+                xhr.statusText = "Validation Error";
+                xhr.responseText =
+                  '<span class="status error">Invalid email</span>';
+                htmx.trigger(evt.detail.elt, "htmx:responseError", {
+                  xhr: xhr,
+                  error: "Validation Error",
+                });
+              } else if (url.includes("/mock/cart/add")) {
+                xhr.status = 409;
+                xhr.statusText = "Conflict";
+                xhr.responseText = "Conflict";
+                htmx.trigger(evt.detail.elt, "htmx:responseError", {
+                  xhr: xhr,
+                  error: "Conflict",
+                });
+              } else if (url.includes("/mock/important-action")) {
+                xhr.status = 503;
+                xhr.statusText = "Service Unavailable";
+                xhr.responseText = "Service Unavailable";
+                htmx.trigger(evt.detail.elt, "htmx:responseError", {
+                  xhr: xhr,
+                  error: "Service Unavailable",
+                });
+              } else {
+                xhr.status = 200;
+                xhr.statusText = "OK";
+                xhr.responseText = "<div>Success!</div>";
+                xhr.readyState = 4;
+                if (xhr.onreadystatechange) xhr.onreadystatechange();
+              }
+            },
+            Math.random() * 1000 + 500,
+          ); // Random delay 500-1500ms
+        };
+      });
+
+      // Helper for counter example
+      function updateCounter(delta) {
+        const display = document.querySelector(".quantity-display");
+        const currentCount = parseInt(display.dataset.count);
+        const newCount = Math.max(0, currentCount + delta);
+        display.dataset.count = newCount;
+        display.textContent = newCount;
+        htmx.trigger(display, "update-counter");
+      }
+    </script>
+  </body>
+</html>
