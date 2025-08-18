@@ -62,7 +62,7 @@ jobs:
       run: npx @playwright/test install --with-deps
     
     - name: Run E2E tests
-      run: npm run test:e2e
+      run: node node_modules/@playwright/test/cli.js test
     - name: Debug Playwright versions
       if: failure()
       run: |
