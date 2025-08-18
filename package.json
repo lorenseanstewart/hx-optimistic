@@ -15,7 +15,7 @@
     "test:ui": "vitest --ui",
     "test:run": "vitest run",
     "test:coverage": "vitest run --coverage",
-    "test:e2e": "playwright test",
+    "test:e2e": "node node_modules/@playwright/test/cli.js test",
     "test:browser": "open test-features.html",
     "test:all": "npm run test:run && npm run test:e2e",
     "build": "esbuild src/index.js --bundle --format=iife --outfile=hx-optimistic.js && npm run minify",
@@ -60,5 +60,8 @@
   },
   "engines": {
     "node": ">=14"
+  },
+  "overrides": {
+    "playwright": "npm:@playwright/test@^1.44.0"
   }
 }
