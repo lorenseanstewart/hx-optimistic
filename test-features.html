@@ -1,0 +1,689 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>hx-optimistic Feature Tests</title>
+  
+  <!-- HTMX -->
+  <script src="https://unpkg.com/htmx.org@1.9.10/dist/htmx.min.js"></script>
+  
+  <!-- Extension under test -->
+  <script src="./hx-optimistic.js"></script>
+  
+  <style>
+    body {
+      font-family: system-ui, sans-serif;
+      max-width: 1200px;
+      margin: 0 auto;
+      padding: 20px;
+      line-height: 1.6;
+    }
+    
+    .test-section {
+      margin: 40px 0;
+      padding: 20px;
+      border: 1px solid #ddd;
+      border-radius: 8px;
+    }
+    
+    .test-section h2 {
+      margin-top: 0;
+      color: #333;
+      border-bottom: 2px solid #007acc;
+      padding-bottom: 10px;
+    }
+    
+    .demo-item {
+      margin: 20px 0;
+      padding: 15px;
+      background: #f8f9fa;
+      border-radius: 6px;
+    }
+    
+    .demo-item h3 {
+      margin-top: 0;
+      font-size: 16px;
+      color: #555;
+    }
+    
+    /* Optimistic update styles */
+    .hx-optimistic {
+      background-color: #fff3cd !important;
+      border-color: #ffeaa7 !important;
+      animation: pulse 1s infinite;
+    }
+    
+    .hx-optimistic-error {
+      background-color: #f8d7da !important;
+      color: #721c24 !important;
+      border-color: #f5c6cb !important;
+    }
+    
+    .hx-optimistic-reverting {
+      opacity: 0.7;
+      transition: opacity 0.3s ease;
+    }
+    
+    @keyframes pulse {
+      0%, 100% { opacity: 1; }
+      50% { opacity: 0.7; }
+    }
+    
+    /* Form styles */
+    .form-group {
+      margin-bottom: 15px;
+    }
+    
+    label {
+      display: block;
+      margin-bottom: 5px;
+      font-weight: bold;
+    }
+    
+    input, textarea, select {
+      width: 100%;
+      padding: 8px;
+      border: 1px solid #ddd;
+      border-radius: 4px;
+      font-size: 14px;
+    }
+    
+    button {
+      background: #007acc;
+      color: white;
+      border: none;
+      padding: 10px 20px;
+      border-radius: 4px;
+      cursor: pointer;
+      font-size: 14px;
+    }
+    
+    button:hover {
+      background: #005999;
+    }
+    
+    button:disabled {
+      background: #ccc;
+      cursor: not-allowed;
+    }
+    
+    .card {
+      border: 1px solid #ddd;
+      border-radius: 6px;
+      padding: 15px;
+      margin: 10px 0;
+      background: white;
+    }
+    
+    .status-online { border-left: 4px solid #28a745; }
+    .status-away { border-left: 4px solid #ffc107; }
+    .status-offline { border-left: 4px solid #dc3545; }
+    
+    .rating-stars {
+      display: flex;
+      gap: 5px;
+    }
+    
+    .rating-stars button {
+      background: none;
+      border: none;
+      font-size: 24px;
+      cursor: pointer;
+      color: #ddd;
+      padding: 5px;
+    }
+    
+    .rating-stars button.active {
+      color: #ffc107;
+    }
+    
+    .rating-stars button:hover {
+      color: #ffc107;
+    }
+    
+    .error-display {
+      color: #721c24;
+      background: #f8d7da;
+      border: 1px solid #f5c6cb;
+      padding: 10px;
+      border-radius: 4px;
+      margin: 10px 0;
+      display: none;
+    }
+    
+    .inline-edit {
+      border: 1px dashed #ccc;
+      padding: 10px;
+      border-radius: 4px;
+      min-height: 40px;
+      cursor: text;
+    }
+    
+    .inline-edit:hover {
+      border-color: #007acc;
+      background: #f8f9fa;
+    }
+    
+    .comment {
+      display: flex;
+      gap: 12px;
+      margin: 15px 0;
+      padding: 15px;
+      background: white;
+      border-radius: 6px;
+      border: 1px solid #eee;
+    }
+    
+    .avatar {
+      width: 40px;
+      height: 40px;
+      border-radius: 50%;
+      background: #007acc;
+      color: white;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      font-weight: bold;
+      flex-shrink: 0;
+    }
+    
+    .comment-content {
+      flex: 1;
+    }
+    
+    .comment-meta {
+      font-size: 12px;
+      color: #666;
+      margin-bottom: 5px;
+    }
+  </style>
+</head>
+<body>
+  <h1>hx-optimistic Feature Tests</h1>
+  <p>This page demonstrates all features of the hx-optimistic extension without framework dependencies.</p>
+
+  <!-- Basic Values Update -->
+  <div class="test-section" id="basic-values">
+    <h2>1. Basic Values Updates</h2>
+    
+    <div class="demo-item">
+      <h3>Simple Button with textContent Update</h3>
+      <button hx-post="/api/like" 
+              hx-ext="optimistic"
+              data-optimistic='{"values": {"textContent": "Liking..."}, "errorMessage": "Failed to like", "delay": 2000}'>
+        👍 Like
+      </button>
+      <p><em>Click to see optimistic text change, then error state, then revert</em></p>
+    </div>
+    
+    <div class="demo-item">
+      <h3>Button with className Update</h3>
+      <button id="status-btn"
+              class="status-online"
+              hx-post="/api/status" 
+              hx-ext="optimistic"
+              data-optimistic='{"values": {"className": "status-away", "textContent": "Switching to Away..."}, "errorMessage": "Status update failed", "delay": 3000}'>
+        🟢 Online
+      </button>
+      <p><em>Click to see optimistic class and text change</em></p>
+    </div>
+  </div>
+
+  <!-- Form Field Interpolation -->
+  <div class="test-section" id="form-interpolation">
+    <h2>2. Form Field Interpolation</h2>
+    
+    <div class="demo-item">
+      <h3>Contact Form with Field Interpolation</h3>
+      <form hx-post="/api/contact"
+            hx-ext="optimistic"
+            data-optimistic='{"values": {"textContent": "Submitting: ${email} - ${textarea}"}, "errorMessage": "Submission failed", "delay": 2500}'>
+        <div class="form-group">
+          <label for="email">Email:</label>
+          <input type="email" id="email" name="email" value="test@example.com" required>
+        </div>
+        <div class="form-group">
+          <label for="message">Message:</label>
+          <textarea id="message" name="message" rows="3" required>Hello, this is a test message!</textarea>
+        </div>
+        <div class="form-group">
+          <label for="phone">Phone:</label>
+          <input type="tel" id="phone" name="phone" value="555-0123">
+        </div>
+        <div class="form-group">
+          <label for="website">Website:</label>
+          <input type="url" id="website" name="website" value="https://example.com">
+        </div>
+        <div class="form-group">
+          <label for="search">Search Query:</label>
+          <input type="search" id="search" name="search" value="test query">
+        </div>
+        <button type="submit">Submit Form</button>
+        <p><em>Submit to see interpolated form field values</em></p>
+      </form>
+    </div>
+    
+    <div class="demo-item">
+      <h3>Form with Individual Field Types</h3>
+      <form hx-post="/api/fields"
+            hx-ext="optimistic">
+        <div class="form-group">
+          <input type="text" name="username" value="johndoe" placeholder="Username">
+        </div>
+        <div class="form-group">
+          <input type="password" name="password" value="secret123" placeholder="Password">
+        </div>
+        <div class="form-group">
+          <textarea name="bio" placeholder="Bio">Software developer passionate about web technologies.</textarea>
+        </div>
+        <button type="submit"
+                data-optimistic='{"values": {"textContent": "Creating account for ${text} with bio: ${textarea}..."}, "delay": 2000}'>
+          Create Account
+        </button>
+        <p><em>Demonstrates ${text}, ${password}, ${textarea} interpolation</em></p>
+      </form>
+    </div>
+  </div>
+
+  <!-- Data Attribute Interpolation -->
+  <div class="test-section" id="data-interpolation">
+    <h2>3. Data Attribute and Property Interpolation</h2>
+    
+    <div class="demo-item">
+      <h3>${data:key} Shorthand</h3>
+      <button data-user-id="12345" 
+              data-user-name="John Doe"
+              data-score="98"
+              hx-post="/api/user"
+              hx-ext="optimistic"
+              data-optimistic='{"values": {"textContent": "Updating user ${data:user-name} (ID: ${data:user-id}, Score: ${data:score})"}, "delay": 2000}'>
+        Update User Profile
+      </button>
+      <p><em>Uses ${data:user-name}, ${data:user-id}, ${data:score} patterns</em></p>
+    </div>
+    
+    <div class="demo-item">
+      <h3>${attr:name} Pattern</h3>
+      <a href="/profile" 
+         title="User Profile Page"
+         id="profile-link"
+         hx-post="/api/nav"
+         hx-ext="optimistic"
+         data-optimistic='{"values": {"textContent": "Navigating to ${attr:href} - ${attr:title}"}, "delay": 1500}'>
+        Go to Profile
+      </a>
+      <p><em>Uses ${attr:href} and ${attr:title} patterns</em></p>
+    </div>
+    
+    <div class="demo-item">
+      <h3>${this.textContent} Pattern</h3>
+      <div hx-post="/api/content"
+           hx-ext="optimistic"
+           data-optimistic='{"values": {"title": "Previous content: ${this.textContent}"}}'>
+        Click me to update my title attribute
+      </div>
+      <p><em>Hover over the div after clicking to see the title attribute</em></p>
+    </div>
+  </div>
+
+  <!-- Template-based Updates -->
+  <div class="test-section" id="templates">
+    <h2>4. Template-based Updates</h2>
+    
+    <!-- Templates -->
+    <template id="rating-template">
+      <div class="rating-display hx-optimistic">
+        <strong>Rating: ${data:rating}/5 stars</strong>
+        <div class="rating-stars">
+          <span>⭐⭐⭐⭐⭐</span>
+        </div>
+        <p>Processing your ${data:rating}-star rating...</p>
+      </div>
+    </template>
+    
+    <template id="rating-error">
+      <div class="error-display">
+        <strong>Rating Failed</strong>
+        <p>Error ${status}: ${statusText}</p>
+        <p>Could not save your ${data:rating}-star rating.</p>
+      </div>
+    </template>
+    
+    <template id="edit-optimistic">
+      <div class="inline-edit hx-optimistic">
+        <strong>Saving:</strong> ${this.textContent}
+      </div>
+    </template>
+    
+    <template id="edit-error">
+      <div class="error-display">
+        <strong>Save Failed</strong>
+        <p>Error ${status}: ${error}</p>
+      </div>
+    </template>
+    
+    <div class="demo-item">
+      <h3>Product Rating with Templates</h3>
+      <div id="rating-container" class="card">
+        <h4>Rate this Product</h4>
+        <div class="rating-stars">
+          <button data-rating="1" 
+                  hx-post="/api/rating"
+                  hx-target="#rating-container"
+                  hx-ext="optimistic"
+                  data-optimistic='{"template": "#rating-template", "errorTemplate": "#rating-error", "delay": 3000}'>⭐</button>
+          <button data-rating="2" 
+                  hx-post="/api/rating"
+                  hx-target="#rating-container"
+                  hx-ext="optimistic"
+                  data-optimistic='{"template": "#rating-template", "errorTemplate": "#rating-error", "delay": 3000}'>⭐</button>
+          <button data-rating="3" 
+                  hx-post="/api/rating"
+                  hx-target="#rating-container"
+                  hx-ext="optimistic"
+                  data-optimistic='{"template": "#rating-template", "errorTemplate": "#rating-error", "delay": 3000}'>⭐</button>
+          <button data-rating="4" 
+                  hx-post="/api/rating"
+                  hx-target="#rating-container"
+                  hx-ext="optimistic"
+                  data-optimistic='{"template": "#rating-template", "errorTemplate": "#rating-error", "delay": 3000}'>⭐</button>
+          <button data-rating="5" 
+                  hx-post="/api/rating"
+                  hx-target="#rating-container"
+                  hx-ext="optimistic"
+                  data-optimistic='{"template": "#rating-template", "errorTemplate": "#rating-error", "delay": 3000}'>⭐</button>
+        </div>
+        <p><em>Click any star to see template-based optimistic update with error template</em></p>
+      </div>
+    </div>
+    
+    <div class="demo-item">
+      <h3>Inline Editing with Templates</h3>
+      <div class="inline-edit"
+           hx-post="/api/edit"
+           hx-ext="optimistic"
+           data-optimistic='{"template": "#edit-optimistic", "errorTemplate": "#edit-error", "delay": 2000}'>
+        Click here to edit this text content. This demonstrates inline editing with template-based optimistic updates.
+      </div>
+      <p><em>Click the text to see template-based editing state</em></p>
+    </div>
+  </div>
+
+  <!-- Target Resolution -->
+  <div class="test-section" id="target-resolution">
+    <h2>5. Target Resolution</h2>
+    
+    <div class="demo-item">
+      <h3>Closest Target Selector</h3>
+      <div class="card" id="closest-demo">
+        <h4>Status Card</h4>
+        <p>Current status: <span class="status">Active</span></p>
+        <button hx-post="/api/toggle"
+                hx-target="closest .card"
+                hx-ext="optimistic"
+                data-optimistic='{"values": {"className": "card status-away"}, "delay": 2000}'>
+          Toggle Status
+        </button>
+        <p><em>Button targets closest .card element</em></p>
+      </div>
+    </div>
+    
+    <div class="demo-item">
+      <h3>Find Target Selector</h3>
+      <div class="card">
+        <button hx-post="/api/update-target"
+                hx-target="find .target-element"
+                hx-ext="optimistic"
+                data-optimistic='{"values": {"textContent": "Target updated optimistically!"}, "delay": 2000}'>
+          Update Target
+        </button>
+        <p>This will be updated: <span class="target-element">Original target content</span></p>
+        <p><em>Button uses "find .target-element" to target the span</em></p>
+      </div>
+    </div>
+    
+    <div class="demo-item">
+      <h3>Next Element Selector</h3>
+      <button hx-post="/api/next"
+              hx-target="next .next-target"
+              hx-ext="optimistic"
+              data-optimistic='{"values": {"textContent": "Next element updated!"}, "delay": 2000}'>
+        Update Next Element
+      </button>
+      <p>Not the target</p>
+      <div class="next-target card">This is the next .next-target element</div>
+      <p><em>Button targets "next .next-target" element</em></p>
+    </div>
+    
+    <div class="demo-item">
+      <h3>Previous Element Selector</h3>
+      <div class="previous-target card">This is the previous .previous-target element</div>
+      <p>Not the target</p>
+      <button hx-post="/api/previous"
+              hx-target="previous .previous-target"
+              hx-ext="optimistic"
+              data-optimistic='{"values": {"textContent": "Previous element updated!"}, "delay": 2000}'>
+        Update Previous Element
+      </button>
+      <p><em>Button targets "previous .previous-target" element</em></p>
+    </div>
+  </div>
+
+  <!-- Error Handling -->
+  <div class="test-section" id="error-handling">
+    <h2>6. Error Handling & Recovery</h2>
+    
+    <div class="demo-item">
+      <h3>Error Template with Interpolation</h3>
+      <template id="detailed-error">
+        <div class="error-display">
+          <h4>Request Failed</h4>
+          <p><strong>Status:</strong> ${status} ${statusText}</p>
+          <p><strong>Error:</strong> ${error}</p>
+          <p><strong>User:</strong> ${data:user}</p>
+          <p>Please try again later.</p>
+        </div>
+      </template>
+      
+      <button data-user="Alice"
+              hx-post="/api/will-fail"
+              hx-ext="optimistic"
+              data-optimistic='{"values": {"textContent": "Processing for ${data:user}..."}, "errorTemplate": "#detailed-error", "delay": 2500}'>
+        Process Request (Will Fail)
+      </button>
+      <p><em>Demonstrates error template with ${status}, ${statusText}, ${error}, and ${data:user}</em></p>
+    </div>
+    
+    <div class="demo-item">
+      <h3>Error Mode: Append</h3>
+      <div id="append-demo" class="card">
+        <h4>Original Content</h4>
+        <p>This content will remain when error occurs.</p>
+        <button hx-post="/api/append-error"
+                hx-target="#append-demo"
+                hx-ext="optimistic"
+                data-optimistic='{"values": {"innerHTML": "Loading new content..."}, "errorMessage": "Failed to load content", "errorMode": "append", "delay": 2000}'>
+          Load Content (Will Fail)
+        </button>
+      </div>
+      <p><em>Error message will be appended, not replace content</em></p>
+    </div>
+    
+    <div class="demo-item">
+      <h3>No Auto-Revert (delay: 0)</h3>
+      <button hx-post="/api/permanent-error"
+              hx-ext="optimistic"
+              data-optimistic='{"values": {"textContent": "Processing..."}, "errorMessage": "Permanent error state", "delay": 0}'>
+        Permanent Error Demo
+      </button>
+      <p><em>Error state persists without auto-revert</em></p>
+    </div>
+  </div>
+
+  <!-- Comment System Demo -->
+  <div class="test-section" id="comment-system">
+    <h2>7. Comment System Example</h2>
+    
+    <template id="comment-optimistic">
+      <div class="comment hx-optimistic">
+        <div class="avatar">Y</div>
+        <div class="comment-content">
+          <div class="comment-meta">You • posting...</div>
+          <div>${textarea}</div>
+        </div>
+      </div>
+    </template>
+    
+    <template id="comment-error">
+      <div class="error-display">
+        <strong>Comment Failed</strong>
+        <p>${error}</p>
+      </div>
+    </template>
+    
+    <div class="demo-item">
+      <h3>Comment Submission with Optimistic Updates</h3>
+      
+      <!-- Existing Comments -->
+      <div id="comments-list">
+        <div class="comment">
+          <div class="avatar">J</div>
+          <div class="comment-content">
+            <div class="comment-meta">John • 2 hours ago</div>
+            <div>Great article! Really helpful information.</div>
+          </div>
+        </div>
+        <div class="comment">
+          <div class="avatar">S</div>
+          <div class="comment-content">
+            <div class="comment-meta">Sarah • 1 hour ago</div>
+            <div>Thanks for sharing this. Looking forward to more content like this.</div>
+          </div>
+        </div>
+      </div>
+      
+      <!-- Comment Form -->
+      <form hx-post="/api/comments"
+            hx-target="#comments-list"
+            hx-swap="beforeend"
+            hx-ext="optimistic"
+            data-optimistic='{"template": "#comment-optimistic", "errorTemplate": "#comment-error", "errorMode": "append", "delay": 3000}'>
+        <div class="form-group">
+          <label for="new-comment">Add a comment:</label>
+          <textarea id="new-comment" 
+                   name="comment" 
+                   rows="3" 
+                   placeholder="Share your thoughts..."
+                   required>This is my test comment with optimistic updates!</textarea>
+        </div>
+        <button type="submit">Post Comment</button>
+      </form>
+      <p><em>Submit to see optimistic comment appear, then error, then revert</em></p>
+    </div>
+  </div>
+
+  <!-- Performance & Memory Test -->
+  <div class="test-section" id="performance">
+    <h2>8. Performance & Memory Management</h2>
+    
+    <div class="demo-item">
+      <h3>Rapid Fire Updates (WeakMap Memory Test)</h3>
+      <button id="rapid-fire"
+              hx-post="/api/rapid"
+              hx-ext="optimistic"
+              data-optimistic='{"values": {"textContent": "Update #${count}"}, "delay": 100}'>
+        Click Rapidly (Test Memory)
+      </button>
+      <p id="click-count">Clicks: 0</p>
+      <p><em>Click rapidly to test WeakMap memory management</em></p>
+    </div>
+    
+    <div class="demo-item">
+      <h3>Concurrent Requests (Token Management)</h3>
+      <button id="concurrent"
+              hx-post="/api/concurrent"
+              hx-ext="optimistic"
+              data-optimistic='{"values": {"textContent": "Request in progress..."}, "errorMessage": "Request failed", "delay": 1000}'>
+        Concurrent Test
+      </button>
+      <p><em>Click multiple times quickly to test token-based concurrency control</em></p>
+    </div>
+  </div>
+
+  <script>
+    // Mock server responses - all requests will fail for demonstration
+    document.body.addEventListener('htmx:beforeSend', function(evt) {
+      evt.preventDefault();
+      
+      // Simulate different types of failures
+      setTimeout(() => {
+        const endpoint = evt.detail.xhr.responseURL || evt.detail.pathInfo.requestPath;
+        let status, statusText, error;
+        
+        if (endpoint.includes('/api/like')) {
+          status = 429; statusText = 'Too Many Requests'; error = 'Rate limit exceeded';
+        } else if (endpoint.includes('/api/rating')) {
+          status = 500; statusText = 'Internal Server Error'; error = 'Database connection failed';
+        } else if (endpoint.includes('/api/edit')) {
+          status = 403; statusText = 'Forbidden'; error = 'Permission denied';
+        } else if (endpoint.includes('/api/comments')) {
+          status = 422; statusText = 'Unprocessable Entity'; error = 'Comment validation failed';
+        } else if (endpoint.includes('/api/will-fail')) {
+          status = 404; statusText = 'Not Found'; error = 'Resource not available';
+        } else {
+          status = 500; statusText = 'Server Error'; error = 'Unexpected error occurred';
+        }
+        
+        // Create mock xhr object
+        const mockXhr = {
+          status: status,
+          statusText: statusText,
+          responseText: `Error ${status}: ${error}`
+        };
+        
+        // Trigger error event
+        const errorEvent = new CustomEvent('htmx:responseError', {
+          detail: {
+            xhr: mockXhr,
+            elt: evt.target,
+            target: evt.target,
+            error: error
+          }
+        });
+        
+        evt.target.dispatchEvent(errorEvent);
+      }, 500); // Simulate network delay
+    });
+    
+    // Rapid fire click counter
+    let clickCount = 0;
+    document.getElementById('rapid-fire').addEventListener('click', function() {
+      clickCount++;
+      document.getElementById('click-count').textContent = `Clicks: ${clickCount}`;
+      this.setAttribute('data-optimistic', JSON.stringify({
+        values: { textContent: `Update #${clickCount}` },
+        delay: 100
+      }));
+    });
+    
+    // Log optimistic events for debugging
+    document.body.addEventListener('htmx:beforeRequest', function(evt) {
+      if (evt.target.hasAttribute('data-optimistic')) {
+        console.log('Optimistic update started:', evt.target, evt.detail);
+      }
+    });
+    
+    document.body.addEventListener('htmx:responseError', function(evt) {
+      console.log('Error occurred:', evt.detail);
+    });
+    
+    // Process all elements on page load
+    document.addEventListener('DOMContentLoaded', function() {
+      htmx.process(document.body);
+      console.log('hx-optimistic feature test page loaded');
+      console.log('Extension loaded:', !!window.htmx.extensions.optimistic);
+    });
+  </script>
+</body>
+</html>

@@ -1,5 +1,5 @@
 import { describe, it, expect, beforeEach, afterEach, vi } from 'vitest';
-import { createOptimisticElement, triggerHtmxEvent, nextTick, waitFor } from '../helpers/test-utils.js';
+import { createOptimisticElement, triggerHtmxEvent, nextTick, waitFor, simulateRequestLifecycle, verifyWeakMapUsage, createTemplate } from '../helpers/test-utils.js';
 
 describe('Basic Optimistic Updates Integration', () => {
   let element;
@@ -11,7 +11,7 @@ describe('Basic Optimistic Updates Integration', () => {
 
   afterEach(() => {
     if (element && element.parentNode) {
-      element.parentNode.removeChild(element);
+      element.remove();
     }
   });
 
@@ -74,12 +74,11 @@ describe('Basic Optimistic Updates Integration', () => {
     });
   });
 
-  describe('Snapshot functionality', () => {
-    it('should snapshot specified properties', async () => {
+  describe('WeakMap storage functionality', () => {
+    it('should use WeakMaps instead of dataset for state storage', async () => {
       element = createOptimisticElement(
         '<button class="original-class" hx-post="/api/test" hx-ext="optimistic">Original Text</button>',
         {
-          snapshot: ['textContent', 'className'],
           values: {
             textContent: 'Loading...',
             className: 'loading'
@@ -95,11 +94,16 @@ describe('Basic Optimistic Updates Integration', () => {
 
       // Values should be changed
       expect(element.textContent).toBe('Loading...');
-      expect(element.className).not.toContain('original-class');
+      expect(element.className).toContain('loading');
+      
+      // Verify no data stored in dataset (should use WeakMaps)
+      const verification = verifyWeakMapUsage(element);
+      expect(verification.hasNoWeakMapLeaks).toBe(true);
 
       // Trigger error to revert
       triggerHtmxEvent(element, 'htmx:responseError', {
-        xhr: { status: 500, statusText: 'Server Error' }
+        xhr: { status: 500, statusText: 'Server Error' },
+        elt: element
       });
 
       // Wait for revert (default delay)
@@ -108,27 +112,33 @@ describe('Basic Optimistic Updates Integration', () => {
       // Should be reverted
       expect(element.textContent).toBe(originalText);
       expect(element.className).toContain('original-class');
+      
+      // Still no dataset pollution
+      const postRevertVerification = verifyWeakMapUsage(element);
+      expect(postRevertVerification.hasNoWeakMapLeaks).toBe(true);
     });
 
-    it('should handle snapshotContent flag', async () => {
+    it('should automatically snapshot innerHTML and className', async () => {
       element = createOptimisticElement(
-        '<div hx-post="/api/test" hx-ext="optimistic"><p>Complex</p><span>Content</span></div>',
+        '<div class="original" hx-post="/api/test" hx-ext="optimistic"><p>Complex</p><span>Content</span></div>',
         {
-          snapshotContent: true,
-          template: '<div>Loading...</div>'
+          template: '<div class="loading">Loading...</div>'
         }
       );
 
       const originalHTML = element.innerHTML;
+      const originalClass = element.className;
 
       triggerHtmxEvent(element, 'htmx:beforeRequest');
       await nextTick();
 
-      expect(element.innerHTML).toBe('<div>Loading...</div>');
+      expect(element.innerHTML).toBe('<div class="loading">Loading...</div>');
+      expect(element.className).toContain('hx-optimistic');
 
       // Trigger error
       triggerHtmxEvent(element, 'htmx:responseError', {
-        xhr: { status: 500, statusText: 'Server Error' }
+        xhr: { status: 500, statusText: 'Server Error' },
+        elt: element
       });
 
       // Wait for revert
@@ -136,6 +146,7 @@ describe('Basic Optimistic Updates Integration', () => {
 
       // Complex content should be restored
       expect(element.innerHTML).toBe(originalHTML);
+      expect(element.className).toBe(originalClass);
     });
   });
 
@@ -161,7 +172,7 @@ describe('Basic Optimistic Updates Integration', () => {
     });
   });
 
-  describe('Multiple requests handling', () => {
+  describe('Token-based concurrency control', () => {
     it('should handle concurrent requests with tokens', async () => {
       element = createOptimisticElement(
         '<button hx-post="/api/test" hx-ext="optimistic">Click me</button>',
@@ -177,7 +188,7 @@ describe('Basic Optimistic Updates Integration', () => {
       await nextTick();
       expect(element.textContent).toBe('Loading...');
 
-      // Second request before first completes
+      // Second request before first completes (should get new token)
       element.setAttribute('data-optimistic', JSON.stringify({
         values: { textContent: 'Loading again...' },
         errorMessage: 'Error 2',
@@ -190,12 +201,17 @@ describe('Basic Optimistic Updates Integration', () => {
 
       // First request fails (should be ignored due to token mismatch)
       triggerHtmxEvent(element, 'htmx:responseError', {
-        xhr: { status: 500, statusText: 'Server Error' }
+        xhr: { status: 500, statusText: 'Server Error' },
+        elt: element
       });
       await nextTick();
 
       // Should show the second request's error, not the first
       expect(element.textContent).toBe('Error 2');
+      
+      // Verify no dataset pollution from token management
+      const verification = verifyWeakMapUsage(element);
+      expect(verification.hasNoWeakMapLeaks).toBe(true);
     });
   });
 
@@ -217,7 +233,7 @@ describe('Basic Optimistic Updates Integration', () => {
     });
   });
 
-  describe('No automatic revert option', () => {
+  describe('Memory management', () => {
     it('should not revert when delay is 0', async () => {
       element = createOptimisticElement(
         '<button hx-post="/api/test" hx-ext="optimistic">Click me</button>',
@@ -232,7 +248,8 @@ describe('Basic Optimistic Updates Integration', () => {
       await nextTick();
 
       triggerHtmxEvent(element, 'htmx:responseError', {
-        xhr: { status: 500, statusText: 'Server Error' }
+        xhr: { status: 500, statusText: 'Server Error' },
+        elt: element
       });
       await nextTick();
 
@@ -244,6 +261,10 @@ describe('Basic Optimistic Updates Integration', () => {
       // Should still show error
       expect(element.textContent).toBe('Error occurred');
       expect(element.classList.contains('hx-optimistic-error')).toBe(true);
+      
+      // Verify no memory leaks in dataset
+      const verification = verifyWeakMapUsage(element);
+      expect(verification.hasNoWeakMapLeaks).toBe(true);
     });
   });
 });

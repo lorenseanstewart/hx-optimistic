@@ -16,11 +16,10 @@
     "test:run": "vitest run",
     "test:coverage": "vitest run --coverage",
     "test:e2e": "playwright test",
-    "test:browser": "open test-v1.html",
+    "test:browser": "open test-features.html",
     "test:all": "npm run test:run && npm run test:e2e",
-    "build": "npm run minify && npm run demo:copy",
+    "build": "esbuild src/index.js --bundle --format=iife --outfile=hx-optimistic.js && npm run minify",
     "minify": "npx terser hx-optimistic.js -o hx-optimistic.min.js --compress --mangle",
-    "demo:copy": "cp hx-optimistic.js demo/public/hx-optimistic.js",
     "dev": "npx http-server -p 8080 -o test.html",
     "prepublishOnly": "npm run build && npm run test:run"
   },
@@ -48,6 +47,7 @@
     "htmx.org": "^1.9.0"
   },
   "devDependencies": {
+    "esbuild": "^0.21.0",
     "terser": "^5.15.0",
     "http-server": "^14.1.1",
     "vitest": "^1.6.0",
