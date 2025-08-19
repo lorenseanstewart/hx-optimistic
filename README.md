@@ -29,6 +29,8 @@ Alternative (unpkg, latest v1):
 <script defer src="https://unpkg.com/hx-optimistic@1/hx-optimistic.min.js"></script>
 ```
 
+Compatibility: Works with `htmx` 1.9+ and 2.x.
+
 **Via NPM:**
 ```bash
 npm install hx-optimistic
@@ -53,6 +55,14 @@ Enable the extension and add optimistic behavior to any HTMX element:
 ```
 
 ## 🎯 Core Concepts
+
+- Use `data-optimistic` to declare behavior per element
+- Choose between `values` (simple property changes) and `template` (full HTML)
+- Automatic snapshot and revert: `innerHTML`, `className`, attributes, and `dataset`
+- Token-based concurrency prevents stale errors from overwriting newer states
+- Target resolution via `hx-target` or config `target` chains: `closest`, `find`, `next`, `previous`
+- Errors via `errorMessage` or `errorTemplate` with `errorMode` and `delay`
+- Interpolation supports safe patterns only; avoid arbitrary JS expressions
 
 ## 📦 Bundle Size
 
@@ -120,6 +130,7 @@ All `${...}` patterns supported in templates and values:
 | `${email}` | First email input | `"Email: ${email}"` |
 | `${data:key}` | Data attribute shorthand | `"Count: ${data:count}"` |
 | `${attr:name}` | Any HTML attribute | `"ID: ${attr:id}"` |
+| `${contextKey}` | Value from `config.context` (templates only) | `"Hello, ${username}"` |
 | `${status}` | HTTP status (errors only) | `"Error ${status}"` |
 | `${statusText}` | HTTP status text (errors only) | `"Error: ${statusText}"` |
 | `${error}` | Error message (errors only) | `"Failed: ${error}"` |
@@ -133,7 +144,7 @@ All `${...}` patterns supported in templates and values:
 Complete configuration reference for `data-optimistic`:
 
 ### Snapshot Behavior
-innerHTML and className are automatically captured and restored on revert; no configuration is required.
+`innerHTML`, `className`, all attributes, and the element `dataset` are automatically captured and restored on revert; no configuration is required.
 
 ### Optimistic Updates
 ```javascript
@@ -147,9 +158,12 @@ innerHTML and className are automatically captured and restored on revert; no co
   // Rich HTML templates
   "template": "#loading-template",  // Or inline HTML
   "target": "closest .card",       // Different target for optimistic update
-  "swap": "beforeend"              // Append instead of replace
+  "swap": "beforeend",             // Append instead of replace
+  "class": "my-optimistic"         // Optional custom class applied during optimistic state
 }
 ```
+
+`swap` supports `beforeend` and `afterbegin`. If omitted, content is replaced.
 
 ### Error Handling
 ```javascript
@@ -161,6 +175,45 @@ innerHTML and className are automatically captured and restored on revert; no co
 }
 ```
 
+### Context Data
+Provide additional variables for template interpolation:
+
+```json
+{
+  "template": "<div>Hello, ${username}</div>",
+  "context": { "username": "Alice" }
+}
+```
+
+Full example:
+
+```html
+<div class="profile-card">
+  <h3>Alex</h3>
+  <p>Status: 🔴 Offline</p>
+  <button
+    hx-post="/api/status"
+    hx-target="closest .profile-card"
+    hx-swap="outerHTML"
+    hx-ext="optimistic"
+    data-optimistic='{"template":"#profile-next","errorTemplate":"#profile-error","errorMode":"append","context":{"username":"Alex","nextStatus":"Online","nextIcon":"🟢"}}'
+  >
+    Change Status
+  </button>
+</div>
+
+<template id="profile-next">
+  <div class="profile-card">
+    <h3>${username}</h3>
+    <p>Status: ${nextIcon} ${nextStatus}</p>
+  </div>
+</template>
+
+<template id="profile-error">
+  <div class="error">❌ ${error}</div>
+</template>
+```
+
 ## 🎨 CSS Classes
 
 This library does not include any CSS. These classes are applied so you can style them as you wish:
@@ -169,6 +222,7 @@ This library does not include any CSS. These classes are applied so you can styl
 - `hx-optimistic-error`: applied when an error is shown
 - `hx-optimistic-reverting`: applied while reverting to the snapshot
 - `hx-optimistic-error-message`: wrapper added when errorMode is "append"
+- `hx-optimistic-pending`: may be applied to `<button>` when no `values`/`template` are provided
 
 ## ✅ Best Practices
 
@@ -178,13 +232,14 @@ This library does not include any CSS. These classes are applied so you can styl
   - **template**: richer markup; prefer a `<template id="...">` and reference it with `"#id"`.
 - **Keep interpolation simple**: Only supported patterns are documented (e.g., `${this.value}`, `${textarea}`, `${data:key}`, `${attr:name}`). Avoid expressions like `${count + 1}`; use `data-*`/`hx-vals` to pass values.
 - **Design error UX**: Provide `errorMessage` or `errorTemplate`. Use `errorMode: "append"` to preserve content; set `delay` (ms) for auto-revert, or `delay: 0` to keep the error state.
-- **Target resolution**: Use `hx-target` or config `target` with chains like `closest .card find .title`. Prefer stable selectors over brittle DOM traversal.
+- **Target resolution**: Use `hx-target` or config `target` with chains like `closest .card find .title`. Supported ops: `closest`, `find`, `next`, `previous`. Prefer stable selectors over brittle DOM traversal.
 - **Style the states**: Add styles for `hx-optimistic`, `hx-optimistic-error`, `hx-optimistic-reverting`, and `hx-optimistic-error-message`, or provide a custom `class` in config.
 - **Concurrency is automatic**: Overlapping requests are tokenized; older errors won’t clobber newer optimistic states. Avoid writing concurrency flags into `dataset`.
-- **Snapshot what you change**: By default, `innerHTML` and `className` are restored. If you optimistically change other properties (e.g., `textContent`, specific `data-*`), set `snapshot: ["textContent", "data-foo"]`.
+- **Snapshots are automatic**: `innerHTML`, `className`, attributes, and dataset are restored automatically on revert; no custom snapshot configuration is needed.
 - **Pass extra data via context**: Use `context` to provide additional variables to templates. Error templates also receive `${status}`, `${statusText}`, and `${error}`.
 - **Accessibility**: The extension preserves focus within the target after error/revert. Ensure visible focus styles and consider ARIA live regions for error messages.
 - **Diagnostics**: Watch the console for warnings about unresolved selectors/templates or unsupported interpolation patterns, and fix the sources accordingly.
+- **Default button behavior**: If `data-optimistic` is present on a `<button>` without `values` or `template`, a `hx-optimistic-pending` class is added during the request.
 
 ## 📚 Examples
 See usage snippets above for common patterns.
@@ -246,21 +301,25 @@ If you prefer htmx utilities:
 Use `<template>` elements for better organization:
 
 ```html
-<template id="loading-state">
-  <div class="loading">
-    <svg class="spinner">...</svg>
-    <span>Processing ${this.textContent}...</span>
-  </div>
+<div class="comments"></div>
+
+<template id="comment-preview">
+  <div class="comment"><strong>You:</strong> ${textarea}</div>
+  </template>
+
+<template id="comment-error">
+  <div class="error">❌ ${error}</div>
 </template>
 
-<!-- Reference with # prefix -->
-<button data-optimistic='{"template": "#loading-state"}'>
-  Process Data
-</button>
+<form hx-post="/api/comments" hx-ext="optimistic" hx-target=".comments" hx-swap="beforeend"
+      data-optimistic='{"template":"#comment-preview","errorTemplate":"#comment-error","errorMode":"append"}'>
+  <textarea name="comment" placeholder="Your comment here"></textarea>
+  <button type="submit">Post Comment</button>
+</form>
 ```
 
 ## 🎮 Live Demo
-[View the demo](https://hx-optimistic-demo.com)
+[View the demo](https://hx-optimistic-demo-site.vercel.app/)
 
 ## 🤝 Contributing
 

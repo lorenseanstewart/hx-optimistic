@@ -18,7 +18,6 @@
     "test:all": "npm run test:run",
     "build": "esbuild src/index.js --bundle --format=iife --outfile=hx-optimistic.js && npm run minify",
     "minify": "npx terser hx-optimistic.js -o hx-optimistic.min.js --compress --mangle",
-    "dev": "npx http-server -p 8080 -c-1",
     "prepublishOnly": "npm run build && npm run test:run"
   },
   "keywords": [
@@ -35,12 +34,12 @@
   "license": "MIT",
   "repository": {
     "type": "git",
-    "url": "https://github.com/your-org/hx-optimistic.git"
+    "url": "https://github.com/lorenseanstewart/hx-optimistic.git"
   },
   "bugs": {
-    "url": "https://github.com/your-org/hx-optimistic/issues"
+    "url": "https://github.com/lorenseanstewart/hx-optimistic/issues"
   },
-  "homepage": "https://github.com/your-org/hx-optimistic#readme",
+  "homepage": "https://github.com/lorenseanstewart/hx-optimistic#readme",
   "peerDependencies": {
     "htmx.org": "^1.9.0"
   },
