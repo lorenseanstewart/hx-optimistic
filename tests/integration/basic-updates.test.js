@@ -146,7 +146,8 @@ describe('Basic Optimistic Updates Integration', () => {
 
       // Complex content should be restored
       expect(element.innerHTML).toBe(originalHTML);
-      expect(element.className).toBe(originalClass);
+      // Class should be restored plus htmx-processed added by htmx.process()
+      expect(element.className).toBe(originalClass + ' htmx-processed');
     });
   });
 

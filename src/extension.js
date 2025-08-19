@@ -197,10 +197,8 @@ export function createExtension(htmx) {
       snapshots.delete(targetElt);
       tokens.delete(targetElt);
       this.cleanup(targetElt);
-      const cfg = snapshot.config;
-      if (cfg && cfg.reprocessOnRevert) {
-        processWithHtmxIfAvailable(targetElt);
-      }
+      // Always reprocess after revert to restore htmx functionality
+      processWithHtmxIfAvailable(targetElt);
       const toFocus = snapshot.focusRestore;
       if (toFocus && document.contains(toFocus)) {
         try { toFocus.focus(); } catch (_) {}
