@@ -11,10 +11,10 @@
     "README.md"
   ],
   "scripts": {
-    "test": "vitest",
+    "test": "npm run build && vitest",
     "test:ui": "vitest --ui",
-    "test:run": "vitest run",
-    "test:coverage": "vitest run --coverage",
+    "test:run": "npm run build && vitest run",
+    "test:coverage": "npm run build && vitest run --coverage",
     "test:all": "npm run test:run",
     "build": "esbuild src/index.js --bundle --format=iife --outfile=hx-optimistic.js && npm run minify",
     "minify": "npx terser hx-optimistic.js -o hx-optimistic.min.js --compress --mangle",

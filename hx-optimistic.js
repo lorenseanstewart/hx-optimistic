@@ -391,6 +391,10 @@
         snapshots.delete(targetElt);
         tokens.delete(targetElt);
         this.cleanup(targetElt);
+        const cfg = snapshot.config;
+        if (cfg && cfg.reprocessOnRevert) {
+          processWithHtmxIfAvailable(targetElt);
+        }
         const toFocus = snapshot.focusRestore;
         if (toFocus && document.contains(toFocus)) {
           try {
