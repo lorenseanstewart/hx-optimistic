@@ -1,6 +1,6 @@
 # hx-optimistic
 
-A lightweight HTMX extension for optimistic UI updates with automatic rollback on errors. Show immediate user feedback while requests are in-flight, with intelligent error handling and seamless state management.
+An htmx extension for optimistic UI updates with automatic rollback on errors. Combine it with speculation rules (or the htmx preload extension) and the View Transitions API for truly app‑like experience with minimal JavaScript. We love JavaScript, but use it like a spice: a pinch delights, too much overwhelms.
 
 ## ✨ Features
 
@@ -10,7 +10,7 @@ A lightweight HTMX extension for optimistic UI updates with automatic rollback o
 - 🎨 **Template Support** - Rich HTML templates for loading and error states
 - ⚠️ **Developer Warnings** - Console warnings for unsupported patterns
 - 🚫 **No CSS Required** - You control all styling through provided class names
-- 📦 **Tiny** - Only **14.7KB** uncompressed, **6.6KB** minified, **2.5KB** gzipped
+- 📦 **Tiny** - Only **18.2KB** uncompressed, **8.4KB** minified, **3.0KB** gzipped
 - 🔧 **Highly Configurable** - Fine-tune behavior per element
 
 ## 🚀 Quick Start
@@ -23,10 +23,10 @@ A lightweight HTMX extension for optimistic UI updates with automatic rollback o
 <script defer src="https://cdn.jsdelivr.net/npm/hx-optimistic@1/hx-optimistic.min.js"></script>
 ```
 
-Alternative (unpkg, pin exact version):
+Alternative (unpkg, latest v1):
 ```html
 <script defer src="https://unpkg.com/htmx.org@2"></script>
-<script defer src="https://unpkg.com/hx-optimistic@1.0.0/hx-optimistic.min.js"></script>
+<script defer src="https://unpkg.com/hx-optimistic@1/hx-optimistic.min.js"></script>
 ```
 
 **Via NPM:**
@@ -58,9 +58,9 @@ Enable the extension and add optimistic behavior to any HTMX element:
 
 | Artifact | Size |
 |---------|------|
-| Unminified (`hx-optimistic.js`) | 14.7 KB |
-| Minified (`hx-optimistic.min.js`) | 6.6 KB |
-| Minified + gzip | 2.5 KB |
+| Unminified (`hx-optimistic.js`) | 18.2 KB |
+| Minified (`hx-optimistic.min.js`) | 8.4 KB |
+| Minified + gzip | 3.0 KB |
 
 ### Values vs Templates
 
@@ -170,6 +170,22 @@ This library does not include any CSS. These classes are applied so you can styl
 - `hx-optimistic-reverting`: applied while reverting to the snapshot
 - `hx-optimistic-error-message`: wrapper added when errorMode is "append"
 
+## ✅ Best Practices
+
+- **Enable globally when possible**: Add `hx-ext="optimistic"` on `<body>` so elements inherit it. Use per-element `hx-ext` only when you need to opt-in selectively.
+- **Pick the right technique**:
+  - **values**: simple property changes (`textContent`, `className`, `data-*`).
+  - **template**: richer markup; prefer a `<template id="...">` and reference it with `"#id"`.
+- **Keep interpolation simple**: Only supported patterns are documented (e.g., `${this.value}`, `${textarea}`, `${data:key}`, `${attr:name}`). Avoid expressions like `${count + 1}`; use `data-*`/`hx-vals` to pass values.
+- **Design error UX**: Provide `errorMessage` or `errorTemplate`. Use `errorMode: "append"` to preserve content; set `delay` (ms) for auto-revert, or `delay: 0` to keep the error state.
+- **Target resolution**: Use `hx-target` or config `target` with chains like `closest .card find .title`. Prefer stable selectors over brittle DOM traversal.
+- **Style the states**: Add styles for `hx-optimistic`, `hx-optimistic-error`, `hx-optimistic-reverting`, and `hx-optimistic-error-message`, or provide a custom `class` in config.
+- **Concurrency is automatic**: Overlapping requests are tokenized; older errors won’t clobber newer optimistic states. Avoid writing concurrency flags into `dataset`.
+- **Snapshot what you change**: By default, `innerHTML` and `className` are restored. If you optimistically change other properties (e.g., `textContent`, specific `data-*`), set `snapshot: ["textContent", "data-foo"]`.
+- **Pass extra data via context**: Use `context` to provide additional variables to templates. Error templates also receive `${status}`, `${statusText}`, and `${error}`.
+- **Accessibility**: The extension preserves focus within the target after error/revert. Ensure visible focus styles and consider ARIA live regions for error messages.
+- **Diagnostics**: Watch the console for warnings about unresolved selectors/templates or unsupported interpolation patterns, and fix the sources accordingly.
+
 ## 📚 Examples
 See usage snippets above for common patterns.
 
@@ -188,6 +204,42 @@ The extension provides helpful warnings for unsupported patterns:
 "${data:user-id}"                   // Data attributes
 "${attr:title}"                     // HTML attributes  
 "${this.value}"                     // Element properties
+```
+
+### Lifecycle Events
+
+Three custom events are dispatched on the optimistic target. Use event delegation to observe them:
+
+```html
+<script>
+  document.body.addEventListener('optimistic:applied', (e) => {
+    const target = e.target;
+    const { config } = e.detail;
+    // handle start of optimistic state
+  });
+
+  document.body.addEventListener('optimistic:error', (e) => {
+    const target = e.target;
+    const { config, detail: errorData } = e.detail; // { status, statusText, error }
+    // handle error state
+  });
+
+  document.body.addEventListener('optimistic:reverted', (e) => {
+    const target = e.target;
+    const { config } = e.detail;
+    // handle completion of revert
+  });
+</script>
+```
+
+If you prefer htmx utilities:
+
+```html
+<script>
+  htmx.on(document.body, 'optimistic:applied', (e) => { /* ... */ });
+  htmx.on(document.body, 'optimistic:error', (e) => { /* ... */ });
+  htmx.on(document.body, 'optimistic:reverted', (e) => { /* ... */ });
+</script>
 ```
 
 ### Template References

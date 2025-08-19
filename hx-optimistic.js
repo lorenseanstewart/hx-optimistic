@@ -247,6 +247,10 @@
         this.applyOptimistic(targetElt, sourceElt, config);
         setOptimisticStateClass(targetElt, "optimistic");
         addCustomOptimisticClass(targetElt, config);
+        try {
+          htmx2.trigger && htmx2.trigger(targetElt, "optimistic:applied", { config });
+        } catch (_) {
+        }
       },
       handleError: function(evt) {
         const sourceElt = evt.detail?.elt || evt.target;
@@ -258,16 +262,48 @@
         if (!config) return;
         const currentToken = tokens.get(targetElt);
         if (snapshot && snapshot.token !== currentToken) return;
+        const active = document.activeElement;
+        if (active && targetElt.contains(active)) {
+          const existing = snapshots.get(targetElt) || { config, token: currentToken };
+          existing.focusRestore = active;
+          snapshots.set(targetElt, existing);
+        }
         setOptimisticStateClass(targetElt, "error");
         this.showError(targetElt, config, evt);
+        try {
+          const errorData = {
+            status: evt.detail?.xhr?.status || 0,
+            statusText: evt.detail?.xhr?.statusText || "Network Error",
+            error: evt.detail?.error || "Request failed"
+          };
+          htmx2.trigger && htmx2.trigger(targetElt, "optimistic:error", { config, detail: errorData });
+        } catch (_) {
+        }
         if (config.delay > 0) {
           setTimeout(() => this.revert(targetElt, currentToken), config.delay);
         }
       },
       snapshot: function(targetElt, sourceElt, config, token) {
+        const attributes = Array.from(targetElt.attributes).reduce((acc, { name, value }) => {
+          acc[name] = value;
+          return acc;
+        }, {});
+        const dataset = { ...targetElt.dataset };
+        const pickKeys = Array.isArray(config.snapshot) && config.snapshot.length > 0 ? config.snapshot : ["innerHTML", "className"];
+        const granular = {};
+        pickKeys.forEach((k) => {
+          if (k === "textContent") granular.textContent = targetElt.textContent;
+          else if (k === "innerHTML") granular.innerHTML = targetElt.innerHTML;
+          else if (k === "className") granular.className = targetElt.className;
+          else if (k.startsWith("data-")) granular[k] = targetElt.dataset[k.slice(5)];
+          else if (k in targetElt) granular[k] = targetElt[k];
+        });
         const snapshotData = {
           innerHTML: targetElt.innerHTML,
           className: targetElt.className,
+          attributes,
+          dataset,
+          granular,
           config,
           token
         };
@@ -282,7 +318,8 @@
         if (config.template) {
           const template = this.getTemplate(config.template);
           if (template) {
-            const content = interpolateTemplate(template, sourceElt);
+            const context = config && typeof config.context === "object" ? config.context : {};
+            const content = interpolateTemplate(template, sourceElt, context);
             if (config.swap === "beforeend") {
               optimisticTarget.insertAdjacentHTML("beforeend", content);
             } else if (config.swap === "afterbegin") {
@@ -291,6 +328,8 @@
               optimisticTarget.innerHTML = content;
               processWithHtmxIfAvailable(optimisticTarget);
             }
+          } else if (typeof config.template === "string" && config.template.startsWith("#")) {
+            console.warn("[hx-optimistic] Template selector did not resolve:", config.template);
           }
         } else if (config.values) {
           this.applyValues(optimisticTarget, config.values, sourceElt);
@@ -302,11 +341,12 @@
         if (config.errorTemplate) {
           const template = this.getTemplate(config.errorTemplate);
           if (template) {
-            const errorData = {
+            const base = config && typeof config.context === "object" ? config.context : {};
+            const errorData = Object.assign({}, base, {
               status: evt.detail?.xhr?.status || 0,
               statusText: evt.detail?.xhr?.statusText || "Network Error",
               error: evt.detail?.error || "Request failed"
-            };
+            });
             const source = evt.detail?.elt || evt.target;
             const content = interpolateTemplate(template, source, errorData);
             if (config.errorMode === "append") {
@@ -317,6 +357,8 @@
             } else {
               targetElt.innerHTML = content;
             }
+          } else if (typeof config.errorTemplate === "string" && config.errorTemplate.startsWith("#")) {
+            console.warn("[hx-optimistic] Error template selector did not resolve:", config.errorTemplate);
           }
         } else if (config.errorMessage) {
           if (config.errorMode === "append") {
@@ -336,9 +378,30 @@
         setOptimisticStateClass(targetElt, "reverting");
         if (snapshot.innerHTML !== void 0) targetElt.innerHTML = snapshot.innerHTML;
         if (snapshot.className !== void 0) targetElt.className = snapshot.className;
+        try {
+          Array.from(targetElt.getAttributeNames()).forEach((n) => targetElt.removeAttribute(n));
+          Object.entries(snapshot.attributes || {}).forEach(([n, v]) => targetElt.setAttribute(n, v));
+        } catch (_) {
+        }
+        try {
+          Object.keys(targetElt.dataset || {}).forEach((k) => delete targetElt.dataset[k]);
+          Object.assign(targetElt.dataset, snapshot.dataset || {});
+        } catch (_) {
+        }
         snapshots.delete(targetElt);
         tokens.delete(targetElt);
         this.cleanup(targetElt);
+        const toFocus = snapshot.focusRestore;
+        if (toFocus && document.contains(toFocus)) {
+          try {
+            toFocus.focus();
+          } catch (_) {
+          }
+        }
+        try {
+          htmx2.trigger && htmx2.trigger(targetElt, "optimistic:reverted", { config: snapshot.config });
+        } catch (_) {
+        }
       },
       cleanup: function(target) {
         if (!target) return;

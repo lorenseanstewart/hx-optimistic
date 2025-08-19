@@ -80,6 +80,12 @@ export interface OptimisticConfig {
    * @default 2000
    */
   delay?: number;
+
+  /** Optional keys to snapshot for granular restore (defaults to innerHTML & className) */
+  snapshot?: string[];
+
+  /** Additional context merged into template interpolation */
+  context?: Record<string, unknown>;
 }
 
 /**
