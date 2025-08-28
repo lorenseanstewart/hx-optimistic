@@ -1,6 +1,6 @@
 {
   "name": "hx-optimistic",
-  "version": "1.0.10",
+  "version": "1.0.11",
   "description": "HTMX extension for optimistic UI updates with automatic rollback on errors",
   "main": "hx-optimistic.js",
   "types": "hx-optimistic.d.ts",
